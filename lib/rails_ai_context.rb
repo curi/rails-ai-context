@@ -75,8 +75,9 @@ require_relative "rails_ai_context/serializers/rules_serializer"
 require_relative "rails_ai_context/serializers/copilot_serializer"
 require_relative "rails_ai_context/serializers/json_serializer"
 
-# Diagnostics
+# Diagnostics & Watch
 require_relative "rails_ai_context/doctor"
+require_relative "rails_ai_context/watcher"
 
 # MCP Resources & Server
 require_relative "rails_ai_context/resources"

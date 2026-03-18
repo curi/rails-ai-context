@@ -43,6 +43,14 @@ module RailsAiContext
       puts JSON.pretty_generate(context)
     end
 
+    desc "watch", "Watch for changes and auto-regenerate context files"
+    def watch
+      boot_rails!
+      require "rails_ai_context"
+
+      RailsAiContext::Watcher.new.start
+    end
+
     desc "doctor", "Run diagnostic checks and report AI readiness score"
     def doctor
       boot_rails!
@@ -51,10 +59,10 @@ module RailsAiContext
       result = RailsAiContext::Doctor.new.run
       result[:checks].each do |check|
         icon = case check.status
-               when :pass then "PASS"
-               when :warn then "WARN"
-               when :fail then "FAIL"
-               end
+        when :pass then "PASS"
+        when :warn then "WARN"
+        when :fail then "FAIL"
+        end
         $stderr.puts "  [#{icon}] #{check.name}: #{check.message}"
         $stderr.puts "         Fix: #{check.fix}" if check.fix
       end

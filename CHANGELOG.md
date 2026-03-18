@@ -5,6 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-03-18
+
+### Added
+
+- **Cache invalidation** — TTL + file fingerprinting for MCP tool cache (replaces permanent `||=` cache)
+- **MCP Resources** — Static resources (`rails://schema`, `rails://routes`, `rails://conventions`, `rails://gems`) and resource template (`rails://models/{name}`)
+- **Per-assistant serializers** — Claude gets behavioral rules, Cursor/Windsurf get compact rules, Copilot gets task-oriented GFM
+- **Stimulus introspector** — Extracts Stimulus controller targets, values, and actions from JS/TS files
+- **Database stats introspector** — Opt-in PostgreSQL approximate row counts via `pg_stat_user_tables`
+- **Auto-mount HTTP middleware** — Rack middleware for MCP endpoint when `config.auto_mount = true`
+- **Diff-aware regeneration** — Context file generation skips unchanged files
+- **`rails ai:doctor`** — Diagnostic command with AI readiness score (0-100)
+- **`rails ai:watch`** — File watcher that auto-regenerates context files on change (requires `listen` gem)
+
+### Fixed
+
+- **Shell injection in SearchCode** — Replaced backtick execution with `Open3.capture2` array form; added file_type validation, max_results cap, and path traversal protection
+- **Scope extraction** — Fixed broken `model.methods.grep(/^_scope_/)` by parsing source files for `scope :name` declarations
+- **Route introspector** — Fixed `route.internal?` compatibility with Rails 8.1
+
+### Changed
+
+- `generate_context` now returns `{ written: [], skipped: [] }` instead of flat array
+- Default introspectors now include `:stimulus`
+
 ## [0.2.0] - 2026-03-18
 
 ### Added

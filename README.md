@@ -26,12 +26,13 @@ bundle add rails-ai-context
 
 That's it. Now your AI assistant knows:
 
-- 📦 **Every table, column, index, and foreign key** in your database
-- 🏗️ **Every model** with its associations, validations, scopes, enums, and callbacks
-- 🛤️ **Every route** with HTTP verbs, paths, and controller actions
-- ⚡ **Every background job**, mailer, and Action Cable channel
-- 💎 **Every notable gem** and what it means (Devise → auth, Sidekiq → jobs, Turbo → Hotwire)
-- 🏛️ **Your architecture patterns**: service objects, STI, polymorphism, state machines, multi-tenancy
+- **Every table, column, index, and foreign key** in your database
+- **Every model** with its associations, validations, scopes, enums, and callbacks
+- **Every route** with HTTP verbs, paths, and controller actions
+- **Every background job**, mailer, and Action Cable channel
+- **Every notable gem** and what it means (Devise = auth, Sidekiq = jobs, Turbo = Hotwire)
+- **Your architecture patterns**: service objects, STI, polymorphism, state machines, multi-tenancy
+- **Stimulus controllers** with targets, values, and actions
 
 ---
 
@@ -51,12 +52,12 @@ rails ai:context
 ```
 
 This creates:
-- `CLAUDE.md` — for Claude Code
-- `.cursorrules` — for Cursor
-- `.windsurfrules` — for Windsurf
-- `.github/copilot-instructions.md` — for GitHub Copilot
+- `CLAUDE.md` — for Claude Code (with behavioral rules)
+- `.cursorrules` — for Cursor (compact rules format)
+- `.windsurfrules` — for Windsurf (compact rules format)
+- `.github/copilot-instructions.md` — for GitHub Copilot (task-oriented)
 
-**Commit these files.** Your entire team gets smarter AI assistance.
+Each file is tailored to the AI assistant's preferred format. **Commit these files.** Your entire team gets smarter AI assistance.
 
 ### 3. Start the MCP Server
 
@@ -97,6 +98,18 @@ The gem exposes 6 tools via MCP that AI clients can call:
 
 All tools are **read-only** — they never modify your application or database.
 
+## MCP Resources
+
+In addition to tools, the gem registers MCP resources that AI clients can read directly:
+
+| Resource | Description |
+|----------|-------------|
+| `rails://schema` | Full database schema (JSON) |
+| `rails://routes` | All routes (JSON) |
+| `rails://conventions` | Detected patterns and architecture (JSON) |
+| `rails://gems` | Notable gems with categories (JSON) |
+| `rails://models/{name}` | Per-model details (resource template) |
+
 ---
 
 ## How It Works
@@ -124,9 +137,10 @@ All tools are **read-only** — they never modify your application or database.
     (reads file)   any MCP client
 ```
 
-**Two modes:**
+**Three modes:**
 1. **Static files** (`rails ai:context`) — generates markdown files that AI tools read as project context. Zero runtime cost. Works everywhere.
 2. **MCP server** (`rails ai:serve`) — live introspection tools that AI clients call on-demand. Richer, always up-to-date.
+3. **Watch mode** (`rails ai:watch`) — auto-regenerates context files when your code changes.
 
 ---
 
@@ -145,20 +159,50 @@ RailsAiContext.configure do |config|
   config.auto_mount = true
   config.http_path  = "/mcp"
   config.http_port  = 6029
+
+  # Cache TTL for MCP tool responses (seconds)
+  config.cache_ttl = 30
+
+  # Enable Postgres row count stats (opt-in)
+  # config.introspectors += [:database_stats]
 end
 ```
 
 ---
 
+## Diagnostics
+
+Check your app's AI readiness:
+
+```bash
+rails ai:doctor
+```
+
+Reports pass/warn/fail for schema, models, routes, gems, context files, MCP server, and ripgrep. Includes fix suggestions and an AI readiness score (0-100).
+
+---
+
+## Stimulus Support
+
+The gem automatically detects Stimulus controllers and extracts:
+- Controller names (derived from filenames)
+- Static targets
+- Static values
+- Action methods
+
+This gives AI assistants context about your frontend JavaScript alongside your backend Ruby.
+
+---
+
 ## Supported AI Assistants
 
-| AI Assistant | Context File | Command |
-|--------------|-------------|---------|
-| Claude Code | `CLAUDE.md` | `rails ai:context:claude` |
-| Cursor | `.cursorrules` | `rails ai:context:cursor` |
-| Windsurf | `.windsurfrules` | `rails ai:context:windsurf` |
-| GitHub Copilot | `.github/copilot-instructions.md` | `rails ai:context:copilot` |
-| JSON (generic) | `.ai-context.json` | `rails ai:context:json` |
+| AI Assistant | Context File | Format | Command |
+|--------------|-------------|--------|---------|
+| Claude Code | `CLAUDE.md` | Verbose + behavioral rules | `rails ai:context:claude` |
+| Cursor | `.cursorrules` | Compact imperative rules | `rails ai:context:cursor` |
+| Windsurf | `.windsurfrules` | Compact imperative rules | `rails ai:context:windsurf` |
+| GitHub Copilot | `.github/copilot-instructions.md` | Task-oriented GFM | `rails ai:context:copilot` |
+| JSON (generic) | `.ai-context.json` | Structured JSON | `rails ai:context:json` |
 
 ---
 
@@ -166,7 +210,7 @@ end
 
 | Command | Description |
 |---------|-------------|
-| `rails ai:context` | Generate all context files (CLAUDE.md, .cursorrules, etc.) |
+| `rails ai:context` | Generate all context files (skips unchanged) |
 | `rails ai:context:claude` | Generate CLAUDE.md only |
 | `rails ai:context:cursor` | Generate .cursorrules only |
 | `rails ai:context:windsurf` | Generate .windsurfrules only |
@@ -175,6 +219,8 @@ end
 | `rails ai:serve` | Start MCP server (stdio, for Claude Code) |
 | `rails ai:serve_http` | Start MCP server (HTTP, for remote clients) |
 | `rails ai:inspect` | Print introspection summary to stdout |
+| `rails ai:doctor` | Run diagnostics and report AI readiness score |
+| `rails ai:watch` | Watch for changes and auto-regenerate context files |
 
 > **zsh users:** The bracket syntax `rails ai:context_for[claude]` requires quoting in zsh (`rails 'ai:context_for[claude]'`). The named tasks above (`rails ai:context:claude`) work without quoting in any shell.
 
@@ -196,6 +242,8 @@ The gem gracefully degrades when no database is connected — it parses `db/sche
 - Ruby >= 3.2
 - Rails >= 7.1
 - [mcp](https://github.com/modelcontextprotocol/ruby-sdk) (official MCP SDK, installed automatically)
+- Optional: `listen` gem for watch mode
+- Optional: `ripgrep` for fast code search (falls back to Ruby)
 
 ---
 

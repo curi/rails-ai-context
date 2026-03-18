@@ -122,6 +122,13 @@ namespace :ai do
     puts "Run `rails ai:context` to generate context files."
   end
 
+  desc "Watch for changes and auto-regenerate context files (requires listen gem)"
+  task watch: :environment do
+    require "rails_ai_context"
+
+    RailsAiContext::Watcher.new.start
+  end
+
   desc "Run diagnostic checks and report AI readiness score"
   task doctor: :environment do
     require "rails_ai_context"
@@ -133,10 +140,10 @@ namespace :ai do
 
     result[:checks].each do |check|
       icon = case check.status
-             when :pass then "✅"
-             when :warn then "⚠️ "
-             when :fail then "❌"
-             end
+      when :pass then "✅"
+      when :warn then "⚠️ "
+      when :fail then "❌"
+      end
       puts "  #{icon} #{check.name}: #{check.message}"
       puts "     Fix: #{check.fix}" if check.fix
     end
