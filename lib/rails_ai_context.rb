@@ -68,6 +68,9 @@ require_relative "rails_ai_context/tools/get_conventions"
 # Serializers
 require_relative "rails_ai_context/serializers/context_file_serializer"
 require_relative "rails_ai_context/serializers/markdown_serializer"
+require_relative "rails_ai_context/serializers/claude_serializer"
+require_relative "rails_ai_context/serializers/rules_serializer"
+require_relative "rails_ai_context/serializers/copilot_serializer"
 require_relative "rails_ai_context/serializers/json_serializer"
 
 # MCP Resources & Server

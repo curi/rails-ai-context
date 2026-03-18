@@ -51,11 +51,11 @@ module RailsAiContext
 
       def serialize(fmt)
         case fmt
-        when :json
-          JsonSerializer.new(context).call
-        else
-          # All markdown-based formats use the same content
-          MarkdownSerializer.new(context).call
+        when :json     then JsonSerializer.new(context).call
+        when :claude   then ClaudeSerializer.new(context).call
+        when :cursor, :windsurf then RulesSerializer.new(context).call
+        when :copilot  then CopilotSerializer.new(context).call
+        else MarkdownSerializer.new(context).call
         end
       end
     end
