@@ -2,6 +2,11 @@
 
 require "spec_helper"
 
+# Ensure test app models are loaded
+require_relative "../../../internal/app/models/application_record"
+require_relative "../../../internal/app/models/user"
+require_relative "../../../internal/app/models/post"
+
 RSpec.describe RailsAiContext::Introspectors::ModelIntrospector do
   let(:introspector) { described_class.new(Rails.application) }
 

@@ -27,7 +27,7 @@ module RailsAiContext
 
       def extract_routes
         app.routes.routes.filter_map do |route|
-          next if route.internal? # Skip Rails internal routes
+          next if route.respond_to?(:internal?) && route.internal?
           next if route.defaults[:controller].blank?
 
           {
