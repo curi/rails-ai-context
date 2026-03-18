@@ -1,4 +1,4 @@
-ActiveRecord::Schema[7.1].define(version: 2024_01_15_000000) do
+ActiveRecord::Schema.define(version: 2024_01_15_000000) do
   create_table "users" do |t|
     t.string "email"
     t.string "name"
