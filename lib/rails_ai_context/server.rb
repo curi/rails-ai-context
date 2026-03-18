@@ -26,11 +26,15 @@ module RailsAiContext
     def build
       config = RailsAiContext.configuration
 
-      MCP::Server.new(
+      server = MCP::Server.new(
         name: config.server_name,
         version: config.server_version,
         tools: TOOLS
       )
+
+      Resources.register(server)
+
+      server
     end
 
     # Start the MCP server with the configured transport

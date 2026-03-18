@@ -25,8 +25,9 @@ RSpec.describe "MCP Tool Integration" do
   end
 
   describe "MCP::Server" do
+    let(:server) { RailsAiContext::Server.new(Rails.application).build }
+
     it "builds with all tools registered" do
-      server = RailsAiContext::Server.new(Rails.application).build
       expect(server.tools.size).to eq(6)
       expect(server.tools.keys).to contain_exactly(
         "rails_get_schema",
@@ -35,6 +36,16 @@ RSpec.describe "MCP Tool Integration" do
         "rails_get_gems",
         "rails_search_code",
         "rails_get_conventions"
+      )
+    end
+
+    it "registers static resources" do
+      uris = server.resources.map(&:uri)
+      expect(uris).to contain_exactly(
+        "rails://schema",
+        "rails://routes",
+        "rails://conventions",
+        "rails://gems"
       )
     end
   end

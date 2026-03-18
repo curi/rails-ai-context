@@ -70,7 +70,8 @@ require_relative "rails_ai_context/serializers/context_file_serializer"
 require_relative "rails_ai_context/serializers/markdown_serializer"
 require_relative "rails_ai_context/serializers/json_serializer"
 
-# MCP Server
+# MCP Resources & Server
+require_relative "rails_ai_context/resources"
 require_relative "rails_ai_context/server"
 
 # Rails integration — loaded by Bundler.require after Rails is booted
