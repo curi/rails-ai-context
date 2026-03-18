@@ -1,0 +1,97 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        ruby: ["3.2", "3.3", "3.4"]
+        rails: ["7.1", "7.2", "8.0"]
+        exclude:
+          - ruby: "3.2"
+            rails: "8.0"
+
+    name: Ruby ${{ matrix.ruby }} / Rails ${{ matrix.rails }}
+
+    env:
+      RAILS_VERSION: ${{ matrix.rails }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: ${{ matrix.ruby }}
+          bundler-cache: true
+
+      - name: Run specs
+        run: bundle exec rspec
+
+      - name: Run RuboCop
+        run: bundle exec rubocop --parallel
+        if: matrix.ruby == '3.3' && matrix.rails == '8.0'
+
+  publish:
+    needs: test
+    runs-on: ubuntu-latest
+    name: Publish to RubyGems
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.4"
+
+      - name: Verify tag matches gem version
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          GEM_VERSION=$(ruby -r ./lib/rails_ai_context/version -e "puts RailsAiContext::VERSION")
+          if [ "$TAG_VERSION" != "$GEM_VERSION" ]; then
+            echo "::error::Tag version ($TAG_VERSION) does not match gem version ($GEM_VERSION)"
+            exit 1
+          fi
+          echo "Version verified: $GEM_VERSION"
+
+      - name: Build gem
+        run: gem build rails-ai-context.gemspec
+
+      - name: Push to RubyGems
+        uses: rubygems/release-gem@v1
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          VERSION="${TAG#v}"
+
+          # Extract this version's changelog section
+          NOTES=$(awk "/^## \[${VERSION}\]/{found=1; next} /^## \[/{if(found) exit} found{print}" CHANGELOG.md)
+
+          if [ -z "$NOTES" ]; then
+            NOTES="Release ${TAG}. See [CHANGELOG.md](CHANGELOG.md) for details."
+          fi
+
+          # Check if release already exists (e.g., manually created)
+          if gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG already exists, updating body"
+            gh release edit "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" \
+              --title "$TAG" \
+              --notes "$NOTES" \
+              *.gem
+          fi
