@@ -57,6 +57,7 @@ module RailsAiContext
       when :database_stats then Introspectors::DatabaseStatsIntrospector.new(app)
       when :controllers    then Introspectors::ControllerIntrospector.new(app)
       when :views          then Introspectors::ViewIntrospector.new(app)
+      when :view_templates then Introspectors::ViewTemplateIntrospector.new(app)
       when :turbo          then Introspectors::TurboIntrospector.new(app)
       when :i18n           then Introspectors::I18nIntrospector.new(app)
       when :config         then Introspectors::ConfigIntrospector.new(app)

@@ -158,24 +158,22 @@ module RailsAiContext
       def render_mcp_tools_rule # rubocop:disable Metrics/MethodLength
         lines = [
           "---",
-          "description: \"Rails MCP tools — ALWAYS use these before reading Rails files directly\"",
+          "description: \"Rails MCP tools (11) — ALWAYS use these before reading Rails files directly\"",
           "alwaysApply: true",
           "---",
           "",
-          "# Rails MCP Tools — Use These First",
+          "# Rails MCP Tools (11) — Use These First",
           "",
-          "ALWAYS use these MCP tools BEFORE reading db/schema.rb, config/routes.rb, or model files.",
-          "They return parsed, up-to-date data and save tokens. Start with detail:\"summary\".",
+          "ALWAYS use these MCP tools BEFORE reading files directly. They save tokens.",
           "",
-          "- `rails_get_schema(detail:\"summary\")` → then `rails_get_schema(table:\"name\")`",
-          "- `rails_get_model_details(detail:\"summary\")` → then `rails_get_model_details(model:\"Name\")`",
-          "- `rails_get_routes(detail:\"summary\")` → then `rails_get_routes(controller:\"name\")`",
-          "- `rails_get_controllers(detail:\"summary\")` → then `rails_get_controllers(controller:\"Name\")`",
-          "- `rails_get_config` — cache, session, middleware",
-          "- `rails_get_test_info` — framework, factories, CI",
-          "- `rails_get_gems` — categorized gems",
-          "- `rails_get_conventions` — architecture patterns",
-          "- `rails_search_code(pattern:\"regex\", file_type:\"rb\")` — codebase search"
+          "- `rails_get_schema(detail:\"summary\")` → `rails_get_schema(table:\"name\")`",
+          "- `rails_get_model_details(detail:\"summary\")` → `rails_get_model_details(model:\"Name\")`",
+          "- `rails_get_routes(detail:\"summary\")` → `rails_get_routes(controller:\"name\")`",
+          "- `rails_get_controllers(controller:\"Name\", action:\"index\")` — one action's source code",
+          "- `rails_get_view(controller:\"cooks\")` — view list; `rails_get_view(path:\"cooks/index.html.erb\")` — content",
+          "- `rails_get_stimulus(detail:\"summary\")` → `rails_get_stimulus(controller:\"name\")`",
+          "- `rails_get_test_info(detail:\"full\")` — fixtures, factories, helpers; `(model:\"Cook\")` — existing tests",
+          "- `rails_get_config` | `rails_get_gems` | `rails_get_conventions` | `rails_search_code`"
         ]
 
         lines.join("\n")

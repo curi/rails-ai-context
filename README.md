@@ -68,9 +68,9 @@ The install generator creates `.mcp.json` for auto-discovery — Claude Code and
 
 ---
 
-## 9 Live MCP Tools
+## 11 Live MCP Tools
 
-The gem exposes **9 read-only tools** via MCP that AI clients call on-demand:
+The gem exposes **11 read-only tools** via MCP that AI clients call on-demand:
 
 | Tool | What it returns |
 |------|----------------|
@@ -83,6 +83,8 @@ The gem exposes **9 read-only tools** via MCP that AI clients call on-demand:
 | `rails_get_gems` | Notable gems categorized by function |
 | `rails_get_conventions` | Architecture patterns, directory structure |
 | `rails_search_code` | Ripgrep-powered regex search across the codebase |
+| `rails_get_view` | View templates, partials, Stimulus references |
+| `rails_get_stimulus` | Stimulus controllers — targets, values, actions, outlets |
 
 ### Smart Detail Levels
 
@@ -172,7 +174,7 @@ Root files (CLAUDE.md, AGENTS.md, etc.) use **section markers** — your custom 
 | **DevOps** | Puma, Procfile, Docker, deployment tools, asset pipeline |
 | **Architecture** | Service objects, STI, polymorphism, state machines, multi-tenancy, engines |
 
-27 introspectors total. The `:standard` preset runs 9 core ones by default; use `:full` for all 27.
+28 introspectors total. The `:standard` preset runs 10 core ones by default; use `:full` for 27 (`database_stats` is opt-in, PostgreSQL only).
 
 ---
 
@@ -226,7 +228,7 @@ end
 ```ruby
 # config/initializers/rails_ai_context.rb
 RailsAiContext.configure do |config|
-  # Presets: :standard (9 introspectors, default) or :full (all 27)
+  # Presets: :standard (10 introspectors, default) or :full (all 28)
   config.preset = :standard
 
   # Cherry-pick on top of a preset
@@ -260,7 +262,7 @@ end
 | Option | Default | Description |
 |--------|---------|-------------|
 | `preset` | `:standard` | Introspector preset (`:standard` or `:full`) |
-| `introspectors` | 9 core | Array of introspector symbols |
+| `introspectors` | 10 core | Array of introspector symbols |
 | `context_mode` | `:compact` | `:compact` (≤150 lines) or `:full` (dump everything) |
 | `claude_max_lines` | `150` | Max lines for CLAUDE.md in compact mode |
 | `max_tool_response_chars` | `120_000` | Safety cap for MCP tool responses |
@@ -321,7 +323,7 @@ Works with every Rails architecture — auto-detects what's relevant:
 
 | Setup | Coverage | Notes |
 |-------|----------|-------|
-| Rails full-stack (ERB + Hotwire) | 27/27 | All introspectors relevant |
+| Rails full-stack (ERB + Hotwire) | 28/28 | All introspectors relevant |
 | Rails + Inertia.js (React/Vue) | ~22/27 | Views/Turbo partially useful, backend fully covered |
 | Rails API + React/Next.js SPA | ~20/27 | Schema, models, routes, API, auth, jobs — all covered |
 | Rails API + mobile app | ~20/27 | Same as SPA — backend introspection is identical |
@@ -360,7 +362,7 @@ The gem parses `db/schema.rb` as text when no database is connected. Works in CI
 ```bash
 git clone https://github.com/crisnahine/rails-ai-context.git
 cd rails-ai-context && bundle install
-bundle exec rspec       # 408 examples
+bundle exec rspec       # 412 examples
 bundle exec rubocop     # Lint
 ```
 

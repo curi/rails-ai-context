@@ -51,17 +51,18 @@ module RailsAiContext
 
       def render_mcp_tools_rule # rubocop:disable Metrics/MethodLength
         lines = [
-          "# Rails MCP Tools — Use These First",
+          "# Rails MCP Tools (11) — Use These First",
           "",
-          "ALWAYS use these tools BEFORE reading db/schema.rb, config/routes.rb, or model files.",
-          "Start with detail:\"summary\", then drill into specifics.",
+          "ALWAYS use these tools BEFORE reading files directly. Start with detail:\"summary\".",
           "",
           "- rails_get_schema(detail:\"summary\") → rails_get_schema(table:\"name\")",
           "- rails_get_model_details(detail:\"summary\") → rails_get_model_details(model:\"Name\")",
           "- rails_get_routes(detail:\"summary\") → rails_get_routes(controller:\"name\")",
-          "- rails_get_controllers(detail:\"summary\") → rails_get_controllers(controller:\"Name\")",
-          "- rails_get_config | rails_get_test_info | rails_get_gems | rails_get_conventions",
-          "- rails_search_code(pattern:\"regex\", file_type:\"rb\")"
+          "- rails_get_controllers(controller:\"Name\", action:\"index\") — one action's source",
+          "- rails_get_view(controller:\"cooks\") — views; rails_get_view(path:\"file\") — content",
+          "- rails_get_stimulus(detail:\"summary\") → rails_get_stimulus(controller:\"name\")",
+          "- rails_get_test_info(detail:\"full\") — fixtures, helpers; (model:\"Cook\") — tests",
+          "- rails_get_config | rails_get_gems | rails_get_conventions | rails_search_code"
         ]
 
         lines.join("\n")

@@ -12,6 +12,10 @@ module RailsAiContext
             type: "string",
             description: "Optional: specific controller name (e.g. 'PostsController'). Omit for all controllers."
           },
+          action: {
+            type: "string",
+            description: "Specific action name (e.g. 'index', 'create'). Requires controller. Returns the action source code and applicable filters."
+          },
           detail: {
             type: "string",
             enum: %w[summary standard full],
@@ -22,7 +26,7 @@ module RailsAiContext
 
       annotations(read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false)
 
-      def self.call(controller: nil, detail: "standard", server_context: nil)
+      def self.call(controller: nil, action: nil, detail: "standard", server_context: nil)
         data = cached_context[:controllers]
         return text_response("Controller introspection not available. Add :controllers to introspectors.") unless data
         return text_response("Controller introspection failed: #{data[:error]}") if data[:error]
@@ -35,6 +39,12 @@ module RailsAiContext
           info = controllers[key]
           return text_response("Controller '#{controller}' not found. Available: #{controllers.keys.sort.join(', ')}") unless info
           return text_response("Error inspecting #{key}: #{info[:error]}") if info[:error]
+
+          # Specific action — return source code
+          if action
+            return text_response(format_action_source(key, info, action))
+          end
+
           return text_response(format_controller(key, info))
         end
 
@@ -78,6 +88,71 @@ module RailsAiContext
           list = controllers.keys.sort.map { |c| "- #{c}" }.join("\n")
           text_response("# Controllers (#{controllers.size})\n\n#{list}")
         end
+      end
+
+      private_class_method def self.format_action_source(controller_name, info, action_name)
+        actions = info[:actions] || []
+        unless actions.map(&:to_s).include?(action_name.to_s)
+          return "Action '#{action_name}' not found in #{controller_name}. Available: #{actions.join(', ')}"
+        end
+
+        # Find applicable filters
+        filters = (info[:filters] || []).select do |f|
+          if f[:only]&.any?
+            f[:only].map(&:to_s).include?(action_name.to_s)
+          elsif f[:except]&.any?
+            !f[:except].map(&:to_s).include?(action_name.to_s)
+          else
+            true
+          end
+        end
+
+        # Extract source code
+        source_path = Rails.root.join("app", "controllers", "#{controller_name.underscore}.rb")
+        source_code = extract_method_source(source_path, action_name)
+
+        lines = [ "# #{controller_name}##{action_name}", "" ]
+
+        if filters.any?
+          lines << "## Applicable Filters"
+          filters.each do |f|
+            line = "- `#{f[:kind]}` **#{f[:name]}**"
+            line += " (only: #{f[:only].join(', ')})" if f[:only]&.any?
+            lines << line
+          end
+          lines << ""
+        end
+
+        if source_code
+          lines << "## Source" << "```ruby" << source_code << "```"
+        else
+          lines << "_Could not extract source code. File: #{source_path}_"
+        end
+
+        if info[:strong_params]&.any?
+          lines << "" << "## Strong Params" << "- #{info[:strong_params].join(', ')}"
+        end
+
+        lines.join("\n")
+      end
+
+      private_class_method def self.extract_method_source(file_path, method_name)
+        return nil unless File.exist?(file_path)
+        source_lines = File.readlines(file_path)
+        start_idx = source_lines.index { |l| l.match?(/^\s*def\s+#{Regexp.escape(method_name.to_s)}\b/) }
+        return nil unless start_idx
+
+        depth = 0
+        result = []
+        source_lines[start_idx..].each do |line|
+          depth += line.scan(/\b(?:def|do|if|unless|case|begin|class|module)\b/).size
+          depth -= line.scan(/\bend\b/).size
+          result << line.rstrip
+          break if depth <= 0
+        end
+        result.join("\n")
+      rescue
+        nil
       end
 
       private_class_method def self.format_controller(name, info)

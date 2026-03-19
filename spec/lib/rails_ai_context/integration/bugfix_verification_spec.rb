@@ -17,7 +17,7 @@ RSpec.describe "Bugfix verification" do
     it "shares a single SHARED_CACHE across all tool subclasses" do
       cache = RailsAiContext::Tools::BaseTool::SHARED_CACHE
 
-      # All 9 tools should resolve the same SHARED_CACHE constant
+      # All 11 tools should resolve the same SHARED_CACHE constant
       RailsAiContext::Server::TOOLS.each do |tool_class|
         expect(tool_class::SHARED_CACHE).to be(cache),
           "#{tool_class.name} has a different SHARED_CACHE object — cache is not shared!"
