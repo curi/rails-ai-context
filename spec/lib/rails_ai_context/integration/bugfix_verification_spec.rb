@@ -5,7 +5,7 @@ require "open3"
 
 # Tests that verify the three bugfixes exercise real code paths.
 # Bug 1 and Bug 3 tests run everywhere. Bug 2 ripgrep tests run against
-# the local codebase and optionally against chatwoot for a larger-scale proof.
+# the local codebase to prove --max-count is per-file, not total.
 RSpec.describe "Bugfix verification" do
   # Bug 1: BaseTool.cached_context was thread-unsafe and each of the 9 tool
   # subclasses cached independently (class instance vars go on the subclass).
