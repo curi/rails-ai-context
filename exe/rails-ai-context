@@ -72,7 +72,7 @@ module RailsAiContext
 
     desc "version", "Print version"
     def version
-      require_relative "../rails_ai_context/version"
+      require_relative "../lib/rails_ai_context/version"
       puts "rails-ai-context v#{RailsAiContext::VERSION}"
     end
 
