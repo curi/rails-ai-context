@@ -14,7 +14,7 @@ TABLE
 def print_result(result)
   result[:written].each { |f| puts "  ✅ #{f}" }
   result[:skipped].each { |f| puts "  ⏭️  #{f} (unchanged)" }
-end unless defined?(print_results)
+end unless defined?(print_result)
 
 def apply_context_mode_override
   if ENV["CONTEXT_MODE"]
