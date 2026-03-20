@@ -30,10 +30,12 @@ module RailsAiContext
         controllers = data[:controllers] || []
         return text_response("No Stimulus controllers found.") if controllers.empty?
 
-        # Specific controller
+        # Specific controller — accepts both dash and underscore naming
+        # (HTML uses data-controller="weekly-chart", file is weekly_chart_controller.js)
         if controller
-          ctrl = controllers.find { |c| c[:name]&.downcase == controller.downcase }
-          return text_response("Controller '#{controller}' not found. Available: #{controllers.map { |c| c[:name] }.sort.join(', ')}") unless ctrl
+          normalized = controller.downcase.tr("-", "_")
+          ctrl = controllers.find { |c| c[:name]&.downcase&.tr("-", "_") == normalized }
+          return text_response("Controller '#{controller}' not found. Available: #{controllers.map { |c| c[:name] }.sort.join(', ')}\n\n_Note: use dashes in HTML (`data-controller=\"my-name\"`) but underscores for lookup (`controller:\"my_name\"`)._") unless ctrl
           return text_response(format_controller_full(ctrl))
         end
 
@@ -78,6 +80,8 @@ module RailsAiContext
         lines << "- **Outlets:** #{ctrl[:outlets].join(', ')}" if ctrl[:outlets]&.any?
         lines << "- **Classes:** #{ctrl[:classes].join(', ')}" if ctrl[:classes]&.any?
         lines << "- **File:** #{ctrl[:file]}" if ctrl[:file]
+        html_name = ctrl[:name]&.tr("_", "-")
+        lines << "" << "_HTML: `data-controller=\"#{html_name}\"`_" if html_name
         lines.join("\n")
       end
     end
