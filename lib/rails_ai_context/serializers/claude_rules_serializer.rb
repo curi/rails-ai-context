@@ -77,6 +77,19 @@ module RailsAiContext
           (conv[:architecture] || []).first(5).each { |p| lines << "- #{p}" }
         end
 
+        # ApplicationController before_actions — apply to all controllers
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          app_ctrl_file = File.join(root, "app", "controllers", "application_controller.rb")
+          if File.exist?(app_ctrl_file)
+            source = File.read(app_ctrl_file)
+            before_actions = source.scan(/before_action\s+:(\w+)/).flatten
+            if before_actions.any?
+              lines << "" << "**Global before_actions:** #{before_actions.join(', ')}"
+            end
+          end
+        rescue; end
+
         lines << ""
         lines << "Use MCP tools for detailed data. Start with `detail:\"summary\"`."
 
@@ -92,8 +105,8 @@ module RailsAiContext
         lines = [
           "# Database Tables (#{tables.size})",
           "",
-          "DO NOT read db/schema.rb directly. Use the `rails_get_schema` MCP tool instead.",
-          "Call with `detail:\"summary\"` first, then `table:\"name\"` for specifics.",
+          "All columns with types are listed below — no need to read db/schema.rb.",
+          "For indexes, foreign keys, or constraints, use `rails_get_schema(table:\"name\")`.",
           ""
         ]
 
@@ -118,8 +131,7 @@ module RailsAiContext
             true
           end
 
-          col_sample = key_cols.first(10).map { |c| "#{c[:name]}:#{c[:type]}" }
-          col_sample << "..." if key_cols.size > 10
+          col_sample = key_cols.map { |c| "#{c[:name]}:#{c[:type]}" }
           col_str = col_sample.any? ? " — #{col_sample.join(', ')}" : ""
 
           # Foreign keys
@@ -158,8 +170,8 @@ module RailsAiContext
         lines = [
           "# ActiveRecord Models (#{models.size})",
           "",
-          "DO NOT read model files to check associations/validations. Use `rails_get_model_details` MCP tool instead.",
-          "Call with `detail:\"summary\"` first, then `model:\"Name\"` for specifics.",
+          "Check this file first for associations, scopes, constants, and validations.",
+          "If you need more detail (callbacks, methods, business logic), use `rails_get_model_details(model:\"Name\")` or Read the file directly.",
           ""
         ]
 
@@ -172,6 +184,39 @@ module RailsAiContext
           line += " (table: #{table})" if table
           line += " — #{assocs} assocs, #{vals} validations"
           lines << line
+
+          # Include app-specific concerns (filter out Rails/gem internals)
+          noise = %w[GeneratedAssociationMethods GeneratedAttributeMethods Kernel PP ObjectMixin
+                     GlobalID Bullet ActionText Turbo ActiveStorage JSON]
+          concerns = (data[:concerns] || []).select { |c|
+            !noise.any? { |n| c.include?(n) } && !c.start_with?("Devise") && !c.include?("::")
+          }
+          lines << "  concerns: #{concerns.join(', ')}" if concerns.any?
+
+          # Include scopes so agents know available query methods
+          scopes = data[:scopes] || []
+          lines << "  scopes: #{scopes.join(', ')}" if scopes.any?
+
+          # Include app-specific instance methods (filter out Rails-generated ones)
+          generated_patterns = %w[build_ create_ reload_ reset_ _changed? _previously_changed?
+                                  _ids _ids= _before_last_save _before_type_cast _came_from_user?
+                                  _for_database _in_database _was]
+          methods = (data[:instance_methods] || []).reject { |m|
+            generated_patterns.any? { |p| m.include?(p) } || m.end_with?("=")
+          }.first(10)
+          lines << "  methods: #{methods.join(', ')}" if methods.any?
+
+          # Include constants (e.g. STATUSES, MODES) so agents know valid values
+          constants = data[:constants] || []
+          constants.each do |c|
+            lines << "  #{c[:name]}: #{c[:values].join(', ')}"
+          end
+
+          # Include enums so agents know valid values
+          enums = data[:enums] || {}
+          enums.each do |attr, values|
+            lines << "  #{attr}: #{values.join(', ')}"
+          end
         end
 
         lines.join("\n")
@@ -210,6 +255,45 @@ module RailsAiContext
           lines << "- Grid: #{fl[:grid]}" if fl[:grid]
         end
 
+        # Shared partials — so agents reuse them instead of recreating
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          shared_dir = File.join(root, "app", "views", "shared")
+          if Dir.exist?(shared_dir)
+            partials = Dir.glob(File.join(shared_dir, "_*.html.erb"))
+              .map { |f| File.basename(f) }
+              .sort
+            if partials.any?
+              lines << "" << "## Shared partials (app/views/shared/)"
+              partials.each { |p| lines << "- #{p}" }
+            end
+          end
+        rescue; end
+
+        # Helpers — so agents use existing helpers instead of creating new ones
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          helper_file = File.join(root, "app", "helpers", "application_helper.rb")
+          if File.exist?(helper_file)
+            helper_methods = File.read(helper_file).scan(/def\s+(\w+)/).flatten
+            if helper_methods.any?
+              lines << "" << "## Helpers (ApplicationHelper)"
+              lines << helper_methods.map { |m| "- #{m}" }.join("\n")
+            end
+          end
+        rescue; end
+
+        # Stimulus controllers — so agents reuse existing controllers
+        stim = context[:stimulus]
+        if stim.is_a?(Hash) && !stim[:error]
+          controllers = stim[:controllers] || []
+          if controllers.any?
+            names = controllers.map { |c| c[:name] || c[:file]&.gsub("_controller.js", "") }.compact.sort
+            lines << "" << "## Stimulus controllers"
+            lines << names.join(", ")
+          end
+        end
+
         lines.join("\n")
       end
 
@@ -218,26 +302,30 @@ module RailsAiContext
           "# Rails MCP Tools — ALWAYS Use These First",
           "",
           "IMPORTANT: This project has live MCP tools that return parsed, up-to-date data.",
-          "ALWAYS use these tools BEFORE reading files like db/schema.rb, config/routes.rb, or model source files.",
-          "The tools return structured, token-efficient summaries. Reading raw files wastes tokens and may be stale.",
+          "Use these tools for reference-only files (schema, routes, tests). For files you will edit, Read them directly.",
+          "The tools return structured, token-efficient summaries with line numbers.",
           "",
           "## When to use MCP tools vs Read",
           "- Use MCP for files you WON'T edit (schema, routes, understanding context)",
           "- For files you WILL edit, just Read them directly — you need Read before Edit anyway",
           "- Use MCP for orientation (summary calls) on large codebases",
           "- Skip MCP when CLAUDE.md + rules already have the info you need",
+          "- Do NOT call rails_get_model_details if CLAUDE.md already shows the model's associations and column types",
+          "- Do NOT call rails_get_stimulus just to check if Stimulus exists — CLAUDE.md confirms it",
           "",
-          "## MCP tools return line numbers — use for surgical edits",
-          "- `rails_get_controllers(action:\"index\")` returns source with line numbers",
-          "- `rails_get_model_details(model:\"Cook\")` returns file structure with line ranges",
-          "- `rails_get_view(path:\"cooks/index.html.erb\")` returns full template",
+          "## After editing — ALWAYS use rails_validate (not Bash)",
+          "- `rails_validate(files:[\"app/models/cook.rb\", \"app/controllers/cooks_controller.rb\", \"app/views/cooks/index.html.erb\"])` — one call checks all",
+          "- Do NOT run `ruby -c`, `erb` checks, or `node -c` separately — use rails_validate instead",
+          "- Do NOT re-read files to verify edits. Trust your Edit and validate syntax only.",
           "",
-          "## Reference-only files — ALWAYS use MCP instead of Read",
-          "- DO NOT read db/schema.rb — use `rails_get_schema` instead",
-          "- DO NOT read config/routes.rb — use `rails_get_routes` instead",
-          "- DO NOT read test files for patterns — use `rails_get_test_info(detail:\"full\")` instead",
+          "## Reference-only files — check rules first, then MCP or Read if needed",
+          "- db/schema.rb — column names and types are in rails-schema.md rules. Read only if you need constraints/defaults.",
+          "- config/routes.rb — use `rails_get_routes` for reference. Read directly if you'll add routes.",
+          "- Model files — scopes, constants, enums are in rails-models.md rules. Read for business logic/methods.",
+          "- app/javascript/controllers/index.js — Stimulus auto-registers controllers. No need to read.",
+          "- Test files — use `rails_get_test_info(detail:\"full\")` for patterns.",
           "",
-          "## Tools (12)",
+          "## Tools (13)",
           "",
           "**rails_get_schema** — database tables, columns, indexes, foreign keys",
           "- `rails_get_schema(detail:\"summary\")` — all tables with column counts",
@@ -270,6 +358,9 @@ module RailsAiContext
           "",
           "**rails_get_edit_context** — surgical edit helper with line numbers",
           "- `rails_get_edit_context(file:\"app/models/cook.rb\", near:\"scope\")` — returns code around match with line numbers",
+          "",
+          "**rails_validate** — syntax checker for edited files",
+          "- `rails_validate(files:[\"app/models/cook.rb\"])` — checks Ruby, ERB, JS syntax in one call",
           "",
           "**rails_get_config** — cache store, session, timezone, middleware, initializers",
           "**rails_get_gems** — notable gems categorized by function",

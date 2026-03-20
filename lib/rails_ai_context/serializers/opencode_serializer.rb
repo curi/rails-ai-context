@@ -180,7 +180,7 @@ module RailsAiContext
 
       def render_mcp_guide # rubocop:disable Metrics/MethodLength
         [
-          "## MCP Tools (12) — ALWAYS Use These First",
+          "## MCP Tools (13) — ALWAYS Use These First",
           "",
           "Use MCP for reference files (schema, routes, tests). Read directly if you'll edit.",
           "MCP tools return line numbers. Start with `detail:\"summary\"`.",
@@ -192,6 +192,8 @@ module RailsAiContext
           "- `rails_get_view(controller:\"cooks\")` — view list; `(path:\"cooks/index.html.erb\")` — content",
           "- `rails_get_stimulus(detail:\"summary\")` → `(controller:\"name\")` — targets, actions, values",
           "- `rails_get_test_info(detail:\"full\")` — fixtures, factories, helpers; `(model:\"Cook\")` — tests",
+          "- `rails_get_edit_context(file:\"path\", near:\"keyword\")` — surgical edit context with line numbers",
+          "- `rails_validate(files:[...])` — batch syntax check for Ruby, ERB, JS",
           "- `rails_get_config` | `rails_get_gems` | `rails_get_conventions` | `rails_search_code`",
           ""
         ]

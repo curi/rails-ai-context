@@ -122,6 +122,14 @@ module RailsAiContext
           line += " (#{assoc_count}a, #{val_count}v)" if assoc_count > 0 || val_count > 0
           line += " — #{top_assocs}" if top_assocs && !top_assocs.empty?
           lines << line
+          scopes = (data[:scopes] || [])
+          constants = (data[:constants] || [])
+          if scopes.any? || constants.any?
+            extras = []
+            extras << "scopes: #{scopes.join(', ')}" if scopes.any?
+            constants.each { |c| extras << "#{c[:name]}: #{c[:values].join(', ')}" }
+            lines << "  #{extras.join(' | ')}"
+          end
         end
         lines << "- _...#{models.size - max_show} more (use `rails_get_model_details` tool)_" if models.size > max_show
         lines << ""
@@ -155,6 +163,30 @@ module RailsAiContext
         lines = [ "## Architecture" ]
         arch.each { |p| lines << "- #{p}" }
         patterns.first(8).each { |p| lines << "- #{p}" }
+
+        # List service objects and jobs from conventions directory_structure
+        dir_struct = conv[:directory_structure] || {}
+
+        if dir_struct["app/services"]
+          begin
+            root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+            service_files = Dir.glob(File.join(root, "app", "services", "*.rb"))
+              .map { |f| File.basename(f, ".rb").camelize }
+              .reject { |s| s == "ApplicationService" }
+            lines << "" << "**Services:** #{service_files.join(', ')}" if service_files.any?
+          rescue; end
+        end
+
+        if dir_struct["app/jobs"]
+          begin
+            root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+            job_files = Dir.glob(File.join(root, "app", "jobs", "*.rb"))
+              .map { |f| File.basename(f, ".rb").camelize }
+              .reject { |j| j == "ApplicationJob" }
+            lines << "**Jobs:** #{job_files.join(', ')}" if job_files.any?
+          rescue; end
+        end
+
         lines << ""
         lines
       end
@@ -193,7 +225,7 @@ module RailsAiContext
 
       def render_mcp_guide # rubocop:disable Metrics/MethodLength
         [
-          "## MCP Tools (12) — ALWAYS Use These First",
+          "## MCP Tools (13) — ALWAYS Use These First",
           "",
           "Use MCP for reference files (schema, routes, tests). Read directly if you'll edit.",
           "MCP tools return line numbers. Start with `detail:\"summary\"`.",
@@ -206,6 +238,7 @@ module RailsAiContext
           "- `rails_get_stimulus(detail:\"summary\")` → `(controller:\"name\")` — targets, actions, values",
           "- `rails_get_test_info(detail:\"full\")` — fixtures, factories, helpers; `(model:\"Cook\")` — tests",
           "- `rails_get_config` | `rails_get_gems` | `rails_get_conventions` | `rails_search_code`",
+          "- `rails_validate(files:[\"path/to/file.rb\"])` — validate Ruby, ERB, JS syntax in one call",
           ""
         ]
       end
@@ -240,6 +273,9 @@ module RailsAiContext
           "- Use the MCP tools to check schema before writing migrations",
           "- Match existing code style",
           "- Run tests after changes",
+          "- After editing, ALWAYS use `rails_validate(files:[...])` — do NOT use separate ruby -c / erb / node -c calls",
+          "- Do NOT re-read files to verify edits — trust your Edit, validate syntax only",
+          "- Stimulus controllers auto-register — no manual import in controllers/index.js needed",
           ""
         ]
       end

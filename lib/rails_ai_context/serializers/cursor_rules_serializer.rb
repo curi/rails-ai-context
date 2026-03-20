@@ -86,6 +86,41 @@ module RailsAiContext
           (conv[:architecture] || []).first(5).each { |p| lines << "- #{p}" }
         end
 
+        # List service objects
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          services_dir = File.join(root, "app", "services")
+          if Dir.exist?(services_dir)
+            service_files = Dir.glob(File.join(services_dir, "*.rb"))
+              .map { |f| File.basename(f, ".rb").camelize }
+              .reject { |s| s == "ApplicationService" }
+            lines << "- Services: #{service_files.join(', ')}" if service_files.any?
+          end
+        rescue; end
+
+        # List jobs
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          jobs_dir = File.join(root, "app", "jobs")
+          if Dir.exist?(jobs_dir)
+            job_files = Dir.glob(File.join(jobs_dir, "*.rb"))
+              .map { |f| File.basename(f, ".rb").camelize }
+              .reject { |j| j == "ApplicationJob" }
+            lines << "- Jobs: #{job_files.join(', ')}" if job_files.any?
+          end
+        rescue; end
+
+        # ApplicationController before_actions
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          app_ctrl = File.join(root, "app", "controllers", "application_controller.rb")
+          if File.exist?(app_ctrl)
+            source = File.read(app_ctrl)
+            before_actions = source.scan(/before_action\s+:(\w+)/).flatten
+            lines << "" << "Global before_actions: #{before_actions.join(', ')}" if before_actions.any?
+          end
+        rescue; end
+
         lines << ""
         lines << "MCP tools available — see rails-mcp-tools.mdc for full reference."
         lines << "Always call with detail:\"summary\" first, then drill into specifics."
@@ -110,10 +145,21 @@ module RailsAiContext
           ""
         ]
 
+        lines << "Check here first for scopes, constants, associations. Read model files for business logic/methods."
+        lines << ""
+
         models.keys.sort.first(30).each do |name|
           data = models[name]
           assocs = (data[:associations] || []).size
           lines << "- #{name} (#{assocs} associations, table: #{data[:table_name] || '?'})"
+          scopes = (data[:scopes] || [])
+          constants = (data[:constants] || [])
+          if scopes.any? || constants.any?
+            extras = []
+            extras << "scopes: #{scopes.join(', ')}" if scopes.any?
+            constants.each { |c| extras << "#{c[:name]}: #{c[:values].join(', ')}" }
+            lines << "  #{extras.join(' | ')}"
+          end
         end
 
         lines << "- ...#{models.size - 30} more" if models.size > 30
@@ -174,6 +220,43 @@ module RailsAiContext
         ]
         components.first(15).each { |c| next unless c[:label] && c[:classes]; lines << "- #{c[:label]}: `#{c[:classes]}`" }
 
+        # Shared partials
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          shared_dir = File.join(root, "app", "views", "shared")
+          if Dir.exist?(shared_dir)
+            partials = Dir.glob(File.join(shared_dir, "_*.html.erb")).map { |f| File.basename(f) }.sort
+            if partials.any?
+              lines << "" << "## Shared partials"
+              partials.each { |p| lines << "- #{p}" }
+            end
+          end
+        rescue; end
+
+        # Helpers
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          helper_file = File.join(root, "app", "helpers", "application_helper.rb")
+          if File.exist?(helper_file)
+            helper_methods = File.read(helper_file).scan(/def\s+(\w+)/).flatten
+            if helper_methods.any?
+              lines << "" << "## Helpers (ApplicationHelper)"
+              helper_methods.each { |m| lines << "- #{m}" }
+            end
+          end
+        rescue; end
+
+        # Stimulus controllers
+        stim = context[:stimulus]
+        if stim.is_a?(Hash) && !stim[:error]
+          controllers = stim[:controllers] || []
+          if controllers.any?
+            names = controllers.map { |c| c[:name] || c[:file]&.gsub("_controller.js", "") }.compact.sort
+            lines << "" << "## Stimulus controllers"
+            lines << names.join(", ")
+          end
+        end
+
         lines.join("\n")
       end
 
@@ -181,11 +264,11 @@ module RailsAiContext
       def render_mcp_tools_rule # rubocop:disable Metrics/MethodLength
         lines = [
           "---",
-          "description: \"Rails MCP tools (12) — use for reference files, read directly if you'll edit\"",
+          "description: \"Rails MCP tools (13) — use for reference files, read directly if you'll edit\"",
           "alwaysApply: true",
           "---",
           "",
-          "# Rails MCP Tools (12) — Use These First",
+          "# Rails MCP Tools (13) — Use These First",
           "",
           "Use MCP for reference files (schema, routes, tests). Read files directly if you'll edit them.",
           "MCP tools return line numbers for surgical edits.",
@@ -197,7 +280,11 @@ module RailsAiContext
           "- `rails_get_view(controller:\"cooks\")` — view list; `rails_get_view(path:\"cooks/index.html.erb\")` — content",
           "- `rails_get_stimulus(detail:\"summary\")` → `rails_get_stimulus(controller:\"name\")`",
           "- `rails_get_test_info(detail:\"full\")` — fixtures, factories, helpers; `(model:\"Cook\")` — existing tests",
-          "- `rails_get_config` | `rails_get_gems` | `rails_get_conventions` | `rails_search_code`"
+          "- `rails_get_config` | `rails_get_gems` | `rails_get_conventions` | `rails_search_code`",
+          "- `rails_get_edit_context(file:\"path\", near:\"keyword\")` — surgical edit context with line numbers",
+          "- `rails_validate(files:[\"path\"])` — validate Ruby, ERB, JS syntax in one call",
+          "",
+          "After editing: use rails_validate to check syntax. Do NOT re-read files to verify."
         ]
 
         lines.join("\n")

@@ -55,7 +55,18 @@ module RailsAiContext
         # Key models (names only — character budget is tight)
         if models.is_a?(Hash) && !models[:error] && models.any?
           lines << "# Key models"
-          models.keys.sort.first(20).each { |name| lines << "- #{name}" }
+          models.keys.sort.first(20).each do |name|
+            data = models[name]
+            lines << "- #{name}"
+            scopes = (data[:scopes] || [])
+            constants = (data[:constants] || [])
+            if scopes.any? || constants.any?
+              extras = []
+              extras << "scopes: #{scopes.join(', ')}" if scopes.any?
+              constants.each { |c| extras << "#{c[:name]}: #{c[:values].join(', ')}" }
+              lines << "  #{extras.join(' | ')}"
+            end
+          end
           lines << "- ...#{models.size - 20} more" if models.size > 20
           lines << ""
         end
@@ -67,9 +78,45 @@ module RailsAiContext
           if arch.any?
             lines << "# Architecture"
             arch.first(5).each { |p| lines << "- #{p}" }
-            lines << ""
           end
         end
+
+        # List service objects
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          services_dir = File.join(root, "app", "services")
+          if Dir.exist?(services_dir)
+            service_files = Dir.glob(File.join(services_dir, "*.rb"))
+              .map { |f| File.basename(f, ".rb").camelize }
+              .reject { |s| s == "ApplicationService" }
+            lines << "Services: #{service_files.join(', ')}" if service_files.any?
+          end
+        rescue; end
+
+        # List jobs
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          jobs_dir = File.join(root, "app", "jobs")
+          if Dir.exist?(jobs_dir)
+            job_files = Dir.glob(File.join(jobs_dir, "*.rb"))
+              .map { |f| File.basename(f, ".rb").camelize }
+              .reject { |j| j == "ApplicationJob" }
+            lines << "Jobs: #{job_files.join(', ')}" if job_files.any?
+          end
+        rescue; end
+
+        # ApplicationController before_actions
+        begin
+          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+          app_ctrl = File.join(root, "app", "controllers", "application_controller.rb")
+          if File.exist?(app_ctrl)
+            source = File.read(app_ctrl)
+            before_actions = source.scan(/before_action\s+:(\w+)/).flatten
+            lines << "Global before_actions: #{before_actions.join(', ')}" if before_actions.any?
+          end
+        rescue; end
+
+        lines << ""
 
         # UI Patterns (compact — character budget is tight)
         vt = context[:view_templates]
@@ -78,6 +125,27 @@ module RailsAiContext
           if components.any?
             lines << "# UI Patterns"
             components.first(8).each { |c| next unless c[:label] && c[:classes]; lines << "- #{c[:label]}: `#{c[:classes]}`" }
+
+            # Shared partials
+            begin
+              root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+              shared_dir = File.join(root, "app", "views", "shared")
+              if Dir.exist?(shared_dir)
+                partials = Dir.glob(File.join(shared_dir, "_*.html.erb")).map { |f| File.basename(f) }.sort
+                lines << "Shared partials: #{partials.join(', ')}" if partials.any?
+              end
+            rescue; end
+
+            # Helpers
+            begin
+              root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
+              helper_file = File.join(root, "app", "helpers", "application_helper.rb")
+              if File.exist?(helper_file)
+                helper_methods = File.read(helper_file).scan(/def\s+(\w+)/).flatten
+                lines << "Helpers: #{helper_methods.join(', ')}" if helper_methods.any?
+              end
+            rescue; end
+
             lines << ""
           end
         end
@@ -93,12 +161,16 @@ module RailsAiContext
         lines << "- rails_get_gems — categorized gems"
         lines << "- rails_get_conventions — architecture patterns"
         lines << "- rails_search_code(pattern:\"regex\"|file_type:\"rb\"|max_results:N)"
+        lines << "- rails_get_edit_context(file:\"path\"|near:\"keyword\")"
+        lines << "- rails_validate(files:[\"path\"])"
         lines << "Start with detail:\"summary\", then drill into specifics."
         lines << ""
         lines << "# Rules"
         lines << "- Follow existing patterns"
         lines << "- Check schema via MCP before writing migrations"
         lines << "- Run tests after changes"
+        lines << "- After editing: use rails_validate, do NOT re-read files to verify"
+        lines << "- Stimulus controllers auto-register — no manual import needed"
 
         lines.join("\n")
       end

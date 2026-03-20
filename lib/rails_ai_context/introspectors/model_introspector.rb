@@ -179,6 +179,12 @@ module RailsAiContext
         macros[:serialize] = source.scan(/\bserialize\s+:(\w+)/).flatten if source.match?(/\bserialize\s+:/)
         macros[:store] = source.scan(/\bstore(?:_accessor)?\s+:(\w+)/).flatten if source.match?(/\bstore(?:_accessor)?\s+:/)
 
+        # Constants with value lists (e.g. STATUSES = %w[pending completed])
+        constants = source.scan(/\b([A-Z][A-Z_]+)\s*=\s*%[wi]\[([^\]]+)\]/).map do |name, values|
+          { name: name, values: values.split }
+        end
+        macros[:constants] = constants if constants.any?
+
         # Delegations
         delegations = source.scan(/\bdelegate\s+(.+?),\s*to:\s*:(\w+)/m).map do |methods_str, target|
           { methods: methods_str.scan(/:(\w+)/).flatten, to: target }

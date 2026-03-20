@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.0] - 2026-03-20
+
+### Added
+
+- **`rails_validate` MCP tool** — batch syntax validation for Ruby, ERB, and JavaScript files. Replaces separate `ruby -c`, ERB check, and `node -c` calls. Returns pass/fail for each file with error details. Uses `Open3.capture2e` (no shell execution). Falls back to brace-matching when Node.js is unavailable.
+- **Model constants extraction** — introspects `STATUSES = %w[...]` style constants and includes them in model context.
+- **Global before_actions in controller rules** — OpenCode AGENTS.md now shows ApplicationController before_actions.
+- **Service objects and jobs listed** — OpenCode controller AGENTS.md now lists service objects and background jobs.
+- **Validate spec** — 8 tests covering happy path, syntax errors, path traversal, MAX_FILES, unsupported types.
+
+### Security
+
+- **Validate tool uses Open3 array form** — no shell execution for `ruby -c`, ERB compilation, or `node -c`. Fixed critical shell quoting bug in ERB validation that caused it to always fail.
+- **File size limit** on JavaScript fallback validation (2MB).
+- **`which node` check uses array form** — `system("which", "node")` instead of shell string.
+
+### Fixed
+
+- ERB validation was broken due to shell quoting bug (backticks + nested quotes). Replaced with `Open3.capture2e("ruby", "-e", script, ARGV[0])`.
+- Rubocop offenses in validate.rb (18 spacing issues auto-corrected).
+
 ## [0.12.0] - 2026-03-20
 
 ### Added

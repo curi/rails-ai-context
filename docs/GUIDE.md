@@ -246,7 +246,7 @@ rails ai:context:claude           # Use this instead (no quoting needed)
 
 ## MCP Tools — Full Reference
 
-All 12 tools are **read-only** and **idempotent** — they never modify your application or database.
+All 13 tools are **read-only** and **idempotent** — they never modify your application or database.
 
 ### rails_get_schema
 
@@ -568,7 +568,7 @@ RailsAiContext.configure do |config|
 end
 ```
 
-Both transports are **read-only** — they expose the same 12 tools and never modify your app.
+Both transports are **read-only** — they expose the same 13 tools and never modify your app.
 
 ---
 

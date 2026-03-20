@@ -27,7 +27,7 @@ Same task — *"Add status and date range filters to the Cooks index page"* — 
 
 | Setup | Tokens | Saved | What it knows |
 |-------|--------|-------|---------------|
-| **rails-ai-context (full)** | **28,834** | **37%** | 12 MCP tools + generated docs + rules |
+| **rails-ai-context (full)** | **28,834** | **37%** | 13 MCP tools + generated docs + rules |
 | rails-ai-context CLAUDE.md only | 33,106 | 27% | Generated docs + rules, no MCP tools |
 | Normal Claude `/init` | 40,700 | 11% | Generic CLAUDE.md only |
 | No rails-ai-context at all | 45,477 | baseline | Nothing — discovers everything from scratch |
@@ -95,9 +95,9 @@ The install generator creates `.mcp.json` for auto-discovery — Claude Code and
 
 ---
 
-## 12 Live MCP Tools
+## 13 Live MCP Tools
 
-The gem exposes **12 read-only tools** via MCP that AI clients call on-demand:
+The gem exposes **13 read-only tools** via MCP that AI clients call on-demand:
 
 | Tool | What it returns |
 |------|----------------|
@@ -113,6 +113,7 @@ The gem exposes **12 read-only tools** via MCP that AI clients call on-demand:
 | `rails_get_view` | View templates, partials, Stimulus references |
 | `rails_get_stimulus` | Stimulus controllers — targets, values, actions, outlets |
 | `rails_get_edit_context` | Surgical edit helper — returns code around a match with line numbers |
+| `rails_validate` | Batch syntax validation for Ruby, ERB, and JavaScript files |
 
 ### Smart Detail Levels
 
@@ -390,7 +391,7 @@ The gem parses `db/schema.rb` as text when no database is connected. Works in CI
 ```bash
 git clone https://github.com/crisnahine/rails-ai-context.git
 cd rails-ai-context && bundle install
-bundle exec rspec       # 481 examples
+bundle exec rspec       # 491 examples
 bundle exec rubocop     # Lint
 ```
 

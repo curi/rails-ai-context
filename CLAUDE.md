@@ -9,7 +9,7 @@ structure to AI assistants via the Model Context Protocol (MCP).
 - `lib/rails_ai_context/configuration.rb` — User-facing config with presets (:standard, :full)
 - `lib/rails_ai_context/introspector.rb` — Orchestrates sub-introspectors
 - `lib/rails_ai_context/introspectors/` — 29 introspectors (schema, models, routes, jobs, gems, conventions, stimulus, database_stats, controllers, views, view_templates, design_tokens, turbo, i18n, config, active_storage, action_text, auth, api, tests, rake_tasks, assets, devops, action_mailbox, migrations, seeds, middleware, engines, multi_database)
-- `lib/rails_ai_context/tools/` — 12 MCP tools using the official mcp SDK
+- `lib/rails_ai_context/tools/` — 13 MCP tools using the official mcp SDK
 - `lib/rails_ai_context/serializers/` — Output formatters (claude, claude_rules, opencode, cursor_rules, windsurf, windsurf_rules, copilot, copilot_instructions, rules, markdown, JSON)
 - `lib/rails_ai_context/resources.rb` — MCP resources (static data AI clients read directly)
 - `lib/rails_ai_context/server.rb` — MCP server configuration (stdio + HTTP transports)
@@ -42,7 +42,7 @@ structure to AI assistants via the Model Context Protocol (MCP).
 ## Testing
 
 ```bash
-bundle exec rspec           # Run specs (481 examples)
+bundle exec rspec           # Run specs (491 examples)
 bundle exec rubocop         # Lint
 ```
 
