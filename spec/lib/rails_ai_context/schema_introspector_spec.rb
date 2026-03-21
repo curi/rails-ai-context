@@ -70,6 +70,55 @@ RSpec.describe RailsAiContext::Introspectors::SchemaIntrospector do
       end
     end
 
+    context "with inline t.index declarations in schema.rb" do
+      before do
+        allow(introspector).to receive(:active_record_connected?).and_return(false)
+
+        db_dir = File.join(fixture_path, "db")
+        FileUtils.mkdir_p(db_dir)
+        File.write(File.join(db_dir, "schema.rb"), <<~RUBY)
+          ActiveRecord::Schema[7.1].define(version: 2024_01_15_000000) do
+            create_table "users" do |t|
+              t.string "email"
+              t.string "name"
+              t.integer "role"
+              t.index ["email"], name: "index_users_on_email", unique: true
+              t.index ["name", "role"], name: "index_users_on_name_and_role"
+            end
+          end
+        RUBY
+      end
+
+      after do
+        FileUtils.rm_rf(File.join(fixture_path, "db"))
+      end
+
+      it "extracts inline single-column indexes" do
+        result = introspector.call
+        indexes = result[:tables]["users"][:indexes]
+        expect(indexes).to include(a_hash_including(name: "index_users_on_email", columns: ["email"]))
+      end
+
+      it "extracts inline multi-column indexes" do
+        result = introspector.call
+        indexes = result[:tables]["users"][:indexes]
+        expect(indexes).to include(a_hash_including(name: "index_users_on_name_and_role", columns: ["name", "role"]))
+      end
+
+      it "captures uniqueness on inline indexes" do
+        result = introspector.call
+        indexes = result[:tables]["users"][:indexes]
+        email_index = indexes.find { |i| i[:name] == "index_users_on_email" }
+        expect(email_index[:unique]).to be true
+      end
+
+      it "does not treat t.index lines as columns" do
+        result = introspector.call
+        col_names = result[:tables]["users"][:columns].map { |c| c[:name] }
+        expect(col_names).not_to include("index")
+      end
+    end
+
     context "with a valid structure.sql fixture" do
       before do
         allow(introspector).to receive(:active_record_connected?).and_return(false)

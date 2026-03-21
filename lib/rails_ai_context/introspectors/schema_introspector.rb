@@ -138,7 +138,7 @@ module RailsAiContext
             tables[current_table] = { columns: [], indexes: [], foreign_keys: [] }
           elsif current_table && (match = line.match(/t\.index\s+(.+)/))
             rest = match[1]
-            cols = rest.scan(/"(\w+)"/).flatten
+            cols = rest.match(/\[([^\]]+)\]/)&.[](1)&.scan(/"(\w+)"/)&.flatten || []
             unique = rest.include?("unique: true")
             idx_name = rest.match(/name:\s*"([\w]+)"/)&.[](1)
             tables[current_table][:indexes] << { name: idx_name, columns: cols, unique: unique }.compact if cols.any?
