@@ -136,6 +136,12 @@ module RailsAiContext
             current_table = match[1]
             next if current_table.start_with?("ar_internal_metadata", "schema_migrations")
             tables[current_table] = { columns: [], indexes: [], foreign_keys: [] }
+          elsif current_table && (match = line.match(/t\.index\s+(.+)/))
+            rest = match[1]
+            cols = rest.scan(/"(\w+)"/).flatten
+            unique = rest.include?("unique: true")
+            idx_name = rest.match(/name:\s*"([\w]+)"/)&.[](1)
+            tables[current_table][:indexes] << { name: idx_name, columns: cols, unique: unique }.compact if cols.any?
           elsif current_table && (match = line.match(/t\.(\w+)\s+"(\w+)"/))
             tables[current_table][:columns] << { name: match[2], type: match[1] }
           elsif (match = line.match(/add_index\s+"(\w+)",\s+(.+)/))
