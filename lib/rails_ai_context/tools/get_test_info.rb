@@ -119,7 +119,9 @@ module RailsAiContext
         end
       end
 
-      MAX_TEST_FILE_SIZE = 500_000 # 500KB safety limit
+      def self.max_test_file_size
+        RailsAiContext.configuration.max_test_file_size
+      end
 
       private_class_method def self.find_test_file(name, type, detail = "full")
         # Normalize: accept "Bonus::CrisesController", "bonus/crises", "Crises"
@@ -151,7 +153,7 @@ module RailsAiContext
           rescue Errno::ENOENT
             next
           end
-          next if File.size(path) > MAX_TEST_FILE_SIZE
+          next if File.size(path) > max_test_file_size
           content = File.read(path)
 
           # Summary/standard: return just test names (saves 2000+ tokens vs full source)

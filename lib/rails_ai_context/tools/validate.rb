@@ -8,7 +8,9 @@ module RailsAiContext
       tool_name "rails_validate"
       description "Validate syntax of multiple files at once (Ruby, ERB, JavaScript). Replaces separate ruby -c, erb check, and node -c calls. Returns pass/fail for each file with error details."
 
-      MAX_FILES = 20
+      def self.max_files
+        RailsAiContext.configuration.max_validate_files
+      end
 
       input_schema(
         properties: {
@@ -28,8 +30,8 @@ module RailsAiContext
           return text_response("No files provided.")
         end
 
-        if files.size > MAX_FILES
-          return text_response("Too many files (#{files.size}). Maximum is #{MAX_FILES} per call.")
+        if files.size > max_files
+          return text_response("Too many files (#{files.size}). Maximum is #{max_files} per call.")
         end
 
         results = []
@@ -152,10 +154,8 @@ module RailsAiContext
 
       # Basic JavaScript validation when node is not available.
       # Checks for unmatched braces, brackets, and parentheses.
-      MAX_VALIDATE_FILE_SIZE = 2_000_000
-
       private_class_method def self.validate_javascript_fallback(full_path)
-        return [ false, "file too large for basic validation" ] if File.size(full_path) > MAX_VALIDATE_FILE_SIZE
+        return [ false, "file too large for basic validation" ] if File.size(full_path) > RailsAiContext.configuration.max_file_size
         content = File.read(full_path)
         stack = []
         openers = { "{" => "}", "[" => "]", "(" => ")" }

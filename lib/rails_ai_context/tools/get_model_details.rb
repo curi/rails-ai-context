@@ -239,7 +239,7 @@ module RailsAiContext
       private_class_method def self.extract_method_signatures(model_name)
         path = Rails.root.join("app", "models", "#{model_name.underscore}.rb")
         return nil unless File.exist?(path)
-        return nil if File.size(path) > MAX_MODEL_SIZE
+        return nil if File.size(path) > max_file_size
 
         source = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
         signatures = []
@@ -262,9 +262,10 @@ module RailsAiContext
 
       # Extract public method names from a concern's source file
       private_class_method def self.extract_concern_methods(concern_name)
+        max_size = RailsAiContext.configuration.max_file_size
         path = Rails.root.join("app", "models", "concerns", "#{concern_name.underscore}.rb")
         return nil unless File.exist?(path)
-        return nil if File.size(path) > MAX_MODEL_SIZE
+        return nil if File.size(path) > max_size
 
         source = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
         methods = []
@@ -285,13 +286,15 @@ module RailsAiContext
         nil
       end
 
-      MAX_MODEL_SIZE = 2_000_000 # 2MB safety limit
+      def self.max_file_size
+        RailsAiContext.configuration.max_file_size
+      end
 
       private_class_method def self.extract_model_structure(model_name)
         path = "app/models/#{model_name.underscore}.rb"
         full_path = Rails.root.join(path)
         return nil unless File.exist?(full_path)
-        return nil if File.size(full_path) > MAX_MODEL_SIZE
+        return nil if File.size(full_path) > max_file_size
 
         source_lines = File.readlines(full_path)
         sections = []

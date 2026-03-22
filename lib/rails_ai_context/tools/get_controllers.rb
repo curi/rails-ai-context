@@ -219,11 +219,9 @@ module RailsAiContext
         lines.join("\n")
       end
 
-      MAX_CONTROLLER_SIZE = 2_000_000 # 2MB safety limit
-
       private_class_method def self.extract_method_with_lines(file_path, method_name)
         return nil unless File.exist?(file_path)
-        return nil if File.size(file_path) > MAX_CONTROLLER_SIZE
+        return nil if File.size(file_path) > RailsAiContext.configuration.max_file_size
         source_lines = File.readlines(file_path)
         start_idx = source_lines.index { |l| l.match?(/^\s*def\s+#{Regexp.escape(method_name.to_s)}\b/) }
         return nil unless start_idx

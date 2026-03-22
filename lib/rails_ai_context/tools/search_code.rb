@@ -8,7 +8,9 @@ module RailsAiContext
       tool_name "rails_search_code"
       description "Search the Rails codebase for a pattern using ripgrep (rg) or Ruby fallback. Returns matching lines with file paths and line numbers. Useful for finding usages, implementations, and patterns."
 
-      MAX_RESULTS_CAP = 100
+      def self.max_results_cap
+        RailsAiContext.configuration.max_search_results
+      end
 
       input_schema(
         properties: {
@@ -59,7 +61,7 @@ module RailsAiContext
         end
 
         # Cap max_results and context_lines
-        max_results = [ max_results.to_i, MAX_RESULTS_CAP ].min
+        max_results = [ max_results.to_i, max_results_cap ].min
         max_results = 30 if max_results < 1
         context_lines = [ [ context_lines.to_i, 0 ].max, 5 ].min
 

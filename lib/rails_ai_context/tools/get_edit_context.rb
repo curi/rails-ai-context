@@ -6,7 +6,9 @@ module RailsAiContext
       tool_name "rails_get_edit_context"
       description "Get just enough context to make a surgical Edit to a file. Returns the target area with line numbers and surrounding code. Purpose-built to replace Read + Edit workflow with a single call."
 
-      MAX_FILE_SIZE = 2_000_000
+      def self.max_file_size
+        RailsAiContext.configuration.max_file_size
+      end
 
       input_schema(
         properties: {
@@ -55,7 +57,7 @@ module RailsAiContext
         rescue Errno::ENOENT
           return text_response("File not found: #{file}")
         end
-        if File.size(full_path) > MAX_FILE_SIZE
+        if File.size(full_path) > max_file_size
           return text_response("File too large: #{file}")
         end
 

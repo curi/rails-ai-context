@@ -161,7 +161,9 @@ module RailsAiContext
         text_response(lines.join("\n"))
       end
 
-      MAX_FILE_SIZE = 2_000_000 # 2MB safety limit
+      def self.max_file_size
+        RailsAiContext.configuration.max_file_size
+      end
 
       private_class_method def self.read_view_file(path)
         # Reject path traversal attempts before any filesystem operation
@@ -186,8 +188,8 @@ module RailsAiContext
         rescue Errno::ENOENT
           return text_response("View not found: #{path}")
         end
-        if File.size(full_path) > MAX_FILE_SIZE
-          return text_response("File too large: #{path} (#{File.size(full_path)} bytes)")
+        if File.size(full_path) > max_file_size
+          return text_response("File too large: #{path} (#{File.size(full_path)} bytes, max: #{max_file_size})")
         end
 
         content = compress_tailwind(strip_svg(File.read(full_path)))

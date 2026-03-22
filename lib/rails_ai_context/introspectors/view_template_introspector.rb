@@ -61,15 +61,14 @@ module RailsAiContext
         partials
       end
 
-      MAX_TOTAL_VIEW_SIZE = 5_000_000 # 5MB cap for aggregated view content
-      MAX_SINGLE_VIEW_SIZE = 500_000 # 500KB per file
-
       def collect_all_view_content(views_dir)
+        max_total = RailsAiContext.configuration.max_view_total_size
+        max_single = RailsAiContext.configuration.max_view_file_size
         content = +""
         Dir.glob(File.join(views_dir, "**", "*.{erb,haml,slim}")).each do |path|
           next if File.directory?(path)
-          next if File.size(path) > MAX_SINGLE_VIEW_SIZE
-          break if content.bytesize >= MAX_TOTAL_VIEW_SIZE
+          next if File.size(path) > max_single
+          break if content.bytesize >= max_total
           content << (File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace) rescue "")
         end
         content

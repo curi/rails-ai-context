@@ -150,7 +150,9 @@ module RailsAiContext
         File.join(app.root, "db", "structure.sql")
       end
 
-      MAX_SCHEMA_FILE_SIZE = 10_000_000 # 10MB safety limit for schema files
+      def max_schema_file_size
+        RailsAiContext.configuration.max_schema_file_size
+      end
 
       # Fallback: parse schema file as text when DB isn't connected.
       # Tries db/schema.rb first, then db/structure.sql.
@@ -166,7 +168,7 @@ module RailsAiContext
       end
 
       def parse_schema_rb(path)
-        return { error: "schema.rb too large (#{File.size(path)} bytes)" } if File.size(path) > MAX_SCHEMA_FILE_SIZE
+        return { error: "schema.rb too large (#{File.size(path)} bytes)" } if File.size(path) > max_schema_file_size
         content = File.read(path)
         tables = {}
         current_table = nil
@@ -209,7 +211,7 @@ module RailsAiContext
       end
 
       def parse_structure_sql(path) # rubocop:disable Metrics/MethodLength
-        return { error: "structure.sql too large (#{File.size(path)} bytes)" } if File.size(path) > MAX_SCHEMA_FILE_SIZE
+        return { error: "structure.sql too large (#{File.size(path)} bytes)" } if File.size(path) > max_schema_file_size
         content = File.read(path)
         tables = {}
 
