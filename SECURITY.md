@@ -4,9 +4,8 @@
 
 | Version | Supported          |
 |---------|--------------------|
-| 0.8.x   | :white_check_mark: |
-| 0.7.x   | :white_check_mark: |
-| < 0.7   | :x:                |
+| 0.15.x  | :white_check_mark: |
+| < 0.14  | :x:                |
 
 ## Reporting a Vulnerability
 
@@ -25,5 +24,5 @@ If you discover a security vulnerability in rails-ai-context, please report it r
 - All MCP tools are **read-only** and never modify your application or database.
 - Code search (`rails_search_code`) uses `Open3.capture2` with array arguments to prevent shell injection.
 - File paths are validated against path traversal attacks.
-- Credentials and secret values are **never** exposed — only key names are introspected.
+- Credentials and secret values are **never** exposed — only a `credentials_configured` boolean is reported (key names and values are never introspected).
 - The gem does not make any outbound network requests.

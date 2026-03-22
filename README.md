@@ -302,9 +302,11 @@ end
 | `max_tool_response_chars` | `120_000` | Safety cap for MCP tool responses |
 | `excluded_models` | internal Rails models | Models to skip during introspection |
 | `excluded_paths` | `node_modules tmp log vendor .git` | Paths excluded from code search |
+| `sensitive_patterns` | `.env .env.* *.key *.pem config/master.key config/credentials.yml.enc` | File patterns blocked from search and read tools |
 | `auto_mount` | `false` | Auto-mount HTTP MCP endpoint |
 | `http_path` | `"/mcp"` | HTTP endpoint path |
 | `http_port` | `6029` | HTTP server port |
+| `http_bind` | `"127.0.0.1"` | HTTP server bind address |
 | `cache_ttl` | `30` | Cache TTL in seconds |
 | `live_reload` | `:auto` | `:auto`, `true`, or `false` — MCP live reload |
 | `live_reload_debounce` | `1.5` | Debounce interval in seconds |
@@ -326,6 +328,7 @@ end
 | `rails ai:context:cursor` | Generate Cursor files only |
 | `rails ai:context:windsurf` | Generate Windsurf files only |
 | `rails ai:context:copilot` | Generate Copilot files only |
+| `rails ai:context:json` | Generate JSON context file only |
 | `rails ai:serve` | Start MCP server (stdio) |
 | `rails ai:serve_http` | Start MCP server (HTTP) |
 | `rails ai:doctor` | Run diagnostics and AI readiness score (0-100) |
@@ -396,7 +399,7 @@ The gem parses `db/schema.rb` as text when no database is connected. Works in CI
 ```bash
 git clone https://github.com/crisnahine/rails-ai-context.git
 cd rails-ai-context && bundle install
-bundle exec rspec       # 491 examples
+bundle exec rspec       # 507 examples
 bundle exec rubocop     # Lint
 ```
 

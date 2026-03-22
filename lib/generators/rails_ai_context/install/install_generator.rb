@@ -41,8 +41,8 @@ module RailsAiContext
 
           RailsAiContext.configure do |config|
             # Introspector preset:
-            #   :standard — 8 core introspectors (schema, models, routes, jobs, gems, conventions, controllers, tests)
-            #   :full     — all 21 introspectors (adds views, turbo, auth, API, config, assets, devops, etc.)
+            #   :standard — 13 core introspectors (schema, models, routes, jobs, gems, conventions, controllers, tests, migrations, stimulus, view_templates, design_tokens, config)
+            #   :full     — all 28 introspectors (adds views, turbo, auth, API, assets, devops, etc.)
             # config.preset = :standard
 
             # Or cherry-pick individual introspectors:

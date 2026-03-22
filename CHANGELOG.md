@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **Schema `add_index` column parsing** — option keys (e.g. `unique`, `name`) were being picked up as column names (PR #12).
+- **Windsurf test command** — extracted `TestCommandDetection` shared module to fix test framework detection in Windsurf serializer.
+
 ## [0.15.2] - 2026-03-22
 
 ### Fixed
@@ -77,6 +84,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Stimulus dash/underscore normalization** — Both `weekly-chart` and `weekly_chart` work for controller lookup. Output shows HTML `data-controller` attribute.
 - **Model public method signatures** — `rails_get_model_details(model: "Cook")` shows method names with params from source, stopping at private boundary.
 
+## [0.13.1] - 2026-03-20
+
+### Changed
+
+- **View summary** — now shows partials used by each view.
+- **Model details** — shows method signatures (name + parameters) instead of just method names.
+- Removed unused demo files; fixed GUIDE.md preset tables.
+
 ## [0.13.0] - 2026-03-20
 
 ### Added
@@ -138,6 +153,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **UI pattern extraction** — scans all views for repeated CSS class patterns. Detects buttons, cards, inputs, labels, badges, links, headings, flashes, alerts. Added to ALL serializers (root files + split rules for Claude, Cursor, Windsurf, Copilot, OpenCode).
 - **View partial structure** — `rails_get_view(detail: "standard")` shows model fields and helper methods used by each partial.
 - **Schema column names** — `.claude/rules/rails-schema.md` shows key column names with types, foreign keys, indexes, and enum values. Keeps polymorphic `_type`, STI `type`, and soft-delete `deleted_at` columns.
+
+## [0.10.2] - 2026-03-20
+
+### Security
+
+- **ReDoS protection** — added regex timeout and converted greedy quantifiers to non-greedy across all pattern matching.
+- **File size limits** — added size caps on parsed files to prevent memory exhaustion from oversized inputs.
+
+## [0.10.1] - 2026-03-19
+
+### Changed
+
+- Patch release for RubyGems republish (no code changes).
 
 ## [0.10.0] - 2026-03-19
 
@@ -277,6 +305,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **MCP tool nil crash** — All 9 MCP tools now handle missing introspector data gracefully instead of crashing with `NoMethodError` when the introspector is not in the active preset (e.g. `rails_get_config` with `:standard` preset)
 - **Zeitwerk dependency** — Changed from open-ended `>= 2.6` to pessimistic `~> 2.6` per RubyGems best practices
 - **Documentation** — Updated CONTRIBUTING.md, CHANGELOG.md, and CLAUDE.md to reflect Zeitwerk autoloading, introspector presets, and `.mcp.json` auto-discovery changes
+
+## [0.5.1] - 2026-03-18
+
+### Fixed
+
+- Documentation updates and animated demo GIF added to README.
+- Zeitwerk autoloading fixes for edge cases.
 
 ## [0.5.0] - 2026-03-18
 

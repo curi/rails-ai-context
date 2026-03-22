@@ -39,7 +39,7 @@ rails ai:context
 This creates:
 1. `config/initializers/rails_ai_context.rb` — configuration file
 2. `.mcp.json` — MCP auto-discovery for Claude Code and Cursor
-3. 20 context files — tailored for each AI assistant
+3. 25 context files — tailored for each AI assistant
 
 ### Existing project
 
@@ -125,15 +125,17 @@ end
 
 ## Generated Files
 
-`rails ai:context` generates **20 files** across all AI assistants:
+`rails ai:context` generates **25 files** across all AI assistants:
 
-### Claude Code (4 files)
+### Claude Code (6 files)
 
 | File | Purpose | Notes |
 |------|---------|-------|
 | `CLAUDE.md` | Main context file | ≤150 lines in compact mode. Claude Code reads this automatically. |
 | `.claude/rules/rails-schema.md` | Database table listing | Auto-loaded by Claude Code alongside CLAUDE.md. |
 | `.claude/rules/rails-models.md` | Model listing with associations | Auto-loaded by Claude Code alongside CLAUDE.md. |
+| `.claude/rules/rails-context.md` | Project context and conventions | Auto-loaded by Claude Code alongside CLAUDE.md. |
+| `.claude/rules/rails-ui-patterns.md` | UI patterns and design tokens | Auto-loaded by Claude Code alongside CLAUDE.md. |
 | `.claude/rules/rails-mcp-tools.md` | Full MCP tool reference | Parameters, detail levels, pagination, workflow guide. |
 
 ### OpenCode (3 files)
@@ -144,13 +146,14 @@ end
 | `app/models/AGENTS.md` | Model reference | Auto-loaded by OpenCode when reading files in `app/models/`. |
 | `app/controllers/AGENTS.md` | Controller reference | Auto-loaded by OpenCode when reading files in `app/controllers/`. |
 
-### Cursor (5 files)
+### Cursor (6 files)
 
 | File | Purpose | Notes |
 |------|---------|-------|
 | `.cursor/rules/rails-project.mdc` | Project overview | `alwaysApply: true` — loaded in every conversation. |
 | `.cursor/rules/rails-models.mdc` | Model reference | `globs: app/models/**/*.rb` — auto-attaches when editing models. |
 | `.cursor/rules/rails-controllers.mdc` | Controller reference | `globs: app/controllers/**/*.rb` — auto-attaches when editing controllers. |
+| `.cursor/rules/rails-ui-patterns.mdc` | UI patterns and design tokens | `alwaysApply: true` — loaded in every conversation. |
 | `.cursor/rules/rails-mcp-tools.mdc` | MCP tool reference | `alwaysApply: true` — always available. |
 
 ### Windsurf (3 files)
@@ -161,13 +164,15 @@ end
 | `.windsurf/rules/rails-context.md` | Project overview | New Windsurf rules format. |
 | `.windsurf/rules/rails-mcp-tools.md` | MCP tool reference | Compact — respects 6K per-file limit. |
 
-### GitHub Copilot (4 files)
+### GitHub Copilot (6 files)
 
 | File | Purpose | Notes |
 |------|---------|-------|
 | `.github/copilot-instructions.md` | Repo-wide instructions | ≤500 lines in compact mode. |
 | `.github/instructions/rails-models.instructions.md` | Model context | `applyTo: app/models/**/*.rb` — loaded when editing models. |
 | `.github/instructions/rails-controllers.instructions.md` | Controller context | `applyTo: app/controllers/**/*.rb` — loaded when editing controllers. |
+| `.github/instructions/rails-context.instructions.md` | Project context and conventions | `applyTo: **/*` — loaded everywhere. |
+| `.github/instructions/rails-ui-patterns.instructions.md` | UI patterns and design tokens | `applyTo: **/*` — loaded everywhere. |
 | `.github/instructions/rails-mcp-tools.instructions.md` | MCP tool reference | `applyTo: **/*` — loaded everywhere. |
 
 ### Generic (1 file)
@@ -188,7 +193,7 @@ Commit **all files except `.ai-context.json`** (which is gitignored). This gives
 
 | Command | Mode | Format | Description |
 |---------|------|--------|-------------|
-| `rails ai:context` | compact | all | Generate all 20 context files |
+| `rails ai:context` | compact | all | Generate all 25 context files |
 | `rails ai:context:full` | full | all | Generate all files in full mode |
 | `rails ai:context:claude` | compact | Claude | CLAUDE.md + .claude/rules/ |
 | `rails ai:context:opencode` | compact | OpenCode | AGENTS.md + per-directory AGENTS.md |
@@ -688,6 +693,7 @@ These run by default. Fast and cover core Rails structure.
 | `controllers` | Actions, filters (before/after/around with only/except), strong params methods, parent class, API controller detection, concerns. |
 | `tests` | Test framework (rspec/minitest), factories/fixtures with locations and counts, system tests, CI config files, coverage tool, test helpers, VCR cassettes. |
 | `migrations` | Total count, schema version, pending migrations, recent migration history with detected actions (create_table, add_column, etc.), migration statistics. |
+| `config` | Cache store, session store, timezone, middleware stack, initializers, credentials keys, CurrentAttributes classes. |
 | `stimulus` | Stimulus controllers with targets, values (with types), actions, outlets, classes. Extracted from JS/TS files. |
 | `view_templates` | View file contents, partial references, Stimulus data attributes, UI pattern extraction, model field usage in partials. |
 | `design_tokens` | Auto-detects CSS framework (Tailwind v3/v4, Bootstrap, Sass, plain CSS) and extracts design tokens from config files and built CSS. |
@@ -701,7 +707,6 @@ Includes all standard introspectors plus:
 | `views` | Layouts, templates grouped by controller, partials (per-controller and shared), helpers with methods, template engines (erb, haml, slim), view components. |
 | `turbo` | Turbo Frames (IDs and files), Turbo Stream templates, model broadcasts (`broadcasts_to`, `broadcasts`). |
 | `i18n` | Default locale, available locales, locale files with key counts, backend class, parse errors. |
-| `config` | Cache store, session store, timezone, middleware stack, initializers, credentials keys, CurrentAttributes classes. |
 | `active_storage` | Attachments (has_one_attached, has_many_attached per model), storage services, direct upload config. |
 | `action_text` | Rich text fields (has_rich_text per model), Action Text installation status. |
 | `auth` | Devise models with modules, Rails 8 built-in auth, has_secure_password, Pundit policies, CanCanCan, CORS config, CSP config. |
