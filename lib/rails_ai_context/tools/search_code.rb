@@ -41,6 +41,18 @@ module RailsAiContext
       def self.call(pattern:, path: nil, file_type: nil, max_results: 30, context_lines: 0, server_context: nil)
         root = Rails.root.to_s
 
+        # Reject empty or whitespace-only patterns
+        if pattern.nil? || pattern.strip.empty?
+          return text_response("Pattern is required. Provide a search term or regex.")
+        end
+
+        # Validate regex syntax early
+        begin
+          Regexp.new(pattern, timeout: 1)
+        rescue RegexpError => e
+          return text_response("Invalid regex pattern: #{e.message}")
+        end
+
         # Validate file_type to prevent injection
         if file_type && !file_type.match?(/\A[a-zA-Z0-9]+\z/)
           return text_response("Invalid file_type: must contain only alphanumeric characters.")

@@ -32,6 +32,11 @@ module RailsAiContext
       SENSITIVE_PATTERNS = nil # uses configuration.sensitive_patterns
 
       def self.call(file:, near:, context_lines: 5, server_context: nil)
+        # Reject empty search term
+        if near.nil? || near.strip.empty?
+          return text_response("The `near` parameter is required. Provide a method name, keyword, or string to find.")
+        end
+
         full_path = Rails.root.join(file)
 
         # Block access to sensitive files (secrets, keys, credentials)

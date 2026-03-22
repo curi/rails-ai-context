@@ -122,7 +122,8 @@ module RailsAiContext
       MAX_TEST_FILE_SIZE = 500_000 # 500KB safety limit
 
       private_class_method def self.find_test_file(name, type, detail = "full")
-        snake = name.to_s.underscore.sub(/_controller$/, "")
+        # Normalize: accept "Bonus::CrisesController", "bonus/crises", "Crises"
+        snake = name.to_s.tr("/", "::").underscore.sub(/_controller$/, "")
         candidates = case type
         when :model
           [
@@ -133,7 +134,9 @@ module RailsAiContext
           [
             "spec/controllers/#{snake}_controller_spec.rb",
             "spec/requests/#{snake}_spec.rb",
-            "test/controllers/#{snake}_controller_test.rb"
+            "test/controllers/#{snake}_controller_test.rb",
+            # Also try without namespace prefix for flat test dirs
+            "spec/requests/#{snake.split('/').last}_spec.rb"
           ]
         end
 

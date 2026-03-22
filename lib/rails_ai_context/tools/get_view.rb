@@ -43,6 +43,11 @@ module RailsAiContext
         end
 
         # Filter by controller (also checks partials for directories like "shared/")
+        # Special case: "layouts" reads from app/views/layouts/ (excluded from normal listing)
+        if controller&.downcase == "layouts"
+          return list_layouts(detail)
+        end
+
         if controller
           ctrl_lower = controller.downcase
           filtered_templates = templates.select { |k, _| k.downcase.start_with?(ctrl_lower + "/") }
@@ -133,6 +138,27 @@ module RailsAiContext
         else
           text_response("Unknown detail level: #{detail}. Use summary, standard, or full.")
         end
+      end
+
+      private_class_method def self.list_layouts(detail)
+        layouts_dir = Rails.root.join("app", "views", "layouts")
+        return text_response("No app/views/layouts/ directory found.") unless Dir.exist?(layouts_dir)
+
+        files = Dir.glob(File.join(layouts_dir, "*")).reject { |f| File.directory?(f) }.sort
+        return text_response("No layout files found.") if files.empty?
+
+        lines = [ "# Layouts (#{files.size} files)", "" ]
+        files.each do |path|
+          relative = "layouts/#{File.basename(path)}"
+          if detail == "full"
+            content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace) rescue "(error reading)"
+            lines << "## #{relative}" << "```erb" << strip_svg(content) << "```" << ""
+          else
+            line_count = (File.readlines(path).size rescue 0)
+            lines << "- #{relative} (#{line_count} lines)"
+          end
+        end
+        text_response(lines.join("\n"))
       end
 
       MAX_FILE_SIZE = 2_000_000 # 2MB safety limit

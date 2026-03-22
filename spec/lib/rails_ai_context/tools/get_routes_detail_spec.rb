@@ -29,7 +29,7 @@ RSpec.describe RailsAiContext::Tools::GetRoutes do
     it "returns summary with route counts per controller" do
       result = described_class.call(detail: "summary")
       text = result.content.first[:text]
-      expect(text).to include("Routes Summary (6 total)")
+      expect(text).to include("Routes Summary (6 routes)")
       expect(text).to include("**users**")
       expect(text).to include("3 routes")
       expect(text).to include("api/v1")
@@ -38,7 +38,7 @@ RSpec.describe RailsAiContext::Tools::GetRoutes do
     it "returns standard detail with paths" do
       result = described_class.call(detail: "standard")
       text = result.content.first[:text]
-      expect(text).to include("Routes (6 total)")
+      expect(text).to include("Routes (6 routes)")
       expect(text).to include("`GET`")
       expect(text).to include("/users")
     end

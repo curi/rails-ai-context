@@ -48,13 +48,19 @@ module RailsAiContext
         # Specific controller — always full detail (searches ALL controllers including framework)
         # Flexible matching: "cooks", "CooksController", "cookscontroller" all work
         if controller
-          normalized = controller.downcase.delete_suffix("controller")
+          # Accept multiple formats: "CooksController", "cooks", "bonus/crises", "Bonus::CrisesController"
+          normalized = controller.downcase.delete_suffix("controller").tr("/", "::")
           key = controllers.keys.find { |k|
             kd = k.downcase
-            kd == controller.downcase || kd.delete_suffix("controller") == normalized
+            kd == controller.downcase ||
+              kd.delete_suffix("controller") == normalized ||
+              kd.delete_suffix("controller").tr("::", "/") == controller.downcase.delete_suffix("controller")
           } || controller
           info = controllers[key]
-          return text_response("Controller '#{controller}' not found. Available: #{app_controller_names.join(', ')}") unless info
+          unless info
+            available = app_controller_names.any? ? "Available: #{app_controller_names.join(', ')}" : "No controllers discovered."
+            return text_response("Controller '#{controller}' not found. #{available}")
+          end
           return text_response("Error inspecting #{key}: #{info[:error]}") if info[:error]
 
           # Specific action — return source code

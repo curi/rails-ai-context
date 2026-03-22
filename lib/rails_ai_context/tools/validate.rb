@@ -93,20 +93,37 @@ module RailsAiContext
         if status.success?
           [ true, nil ]
         else
-          error = result.lines.reject { |l| l.strip.empty? }.first&.strip || "syntax error"
-          error = error.sub(full_path.to_s, File.basename(full_path.to_s))
+          # Show up to 5 non-empty error lines for full context (ruby -c gives multi-line errors)
+          error_lines = result.lines
+            .reject { |l| l.strip.empty? || l.include?("Syntax OK") }
+            .first(5)
+            .map { |l| l.strip.sub(full_path.to_s, File.basename(full_path.to_s)) }
+          error = error_lines.any? ? error_lines.join("\n") : "syntax error"
           [ false, error ]
         end
       end
 
-      # Validate ERB syntax by compiling the template (no shell — uses Open3 array form)
+      # Validate ERB by compiling to Ruby source then syntax-checking the result.
+      # ERB.new(...).src only validates ERB tag syntax — it does NOT catch missing <% end %>.
+      # So we compile to Ruby, then run ruby -c on the compiled output to catch block mismatches.
       private_class_method def self.validate_erb(full_path)
-        script = "require 'erb'; ERB.new(File.read(ARGV[0])).src"
-        result, status = Open3.capture2e("ruby", "-e", script, full_path.to_s)
-        if status.success?
+        # Step 1: Compile ERB to Ruby source
+        compile_script = "require 'erb'; print ERB.new(File.read(ARGV[0])).src"
+        compiled, compile_status = Open3.capture2e("ruby", "-e", compile_script, full_path.to_s)
+
+        unless compile_status.success?
+          error = compiled.lines.reject { |l| l.strip.empty? }.first&.strip || "ERB syntax error"
+          return [ false, error ]
+        end
+
+        # Step 2: Syntax-check the compiled Ruby to catch missing end, unclosed blocks, etc.
+        check_result, check_status = Open3.capture2e("ruby", "-c", "-", stdin_data: compiled)
+        if check_status.success?
           [ true, nil ]
         else
-          error = result.lines.reject { |l| l.strip.empty? }.first&.strip || "ERB syntax error"
+          error = check_result.lines.reject { |l| l.strip.empty? || l.include?("Syntax OK") }.first&.strip || "ERB error"
+          # Make the error more helpful — it's from compiled source, translate back
+          error = error.sub(/^-:/, "compiled ERB line ")
           [ false, error ]
         end
       end
@@ -120,8 +137,12 @@ module RailsAiContext
           if status.success?
             [ true, nil ]
           else
-            error = result.lines.reject { |l| l.strip.empty? }.first&.strip || "syntax error"
-            error = error.sub(full_path.to_s, File.basename(full_path.to_s))
+            # Show up to 3 non-empty error lines for context
+            error_lines = result.lines
+              .reject { |l| l.strip.empty? }
+              .first(3)
+              .map { |l| l.strip.sub(full_path.to_s, File.basename(full_path.to_s)) }
+            error = error_lines.any? ? error_lines.join("\n") : "syntax error"
             [ false, error ]
           end
         else

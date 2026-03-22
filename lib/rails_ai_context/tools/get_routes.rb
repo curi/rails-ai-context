@@ -65,6 +65,7 @@ module RailsAiContext
 
         # Combine PUT/PATCH duplicates (Rails generates both for update routes)
         by_controller = by_controller.transform_values { |actions| dedupe_put_patch(actions) }
+        filtered_total = by_controller.values.sum(&:size)
 
         case detail
         when "summary"
@@ -72,7 +73,7 @@ module RailsAiContext
           app_routes = controller ? by_controller : by_controller.reject { |k, _| FRAMEWORK_PREFIXES.any? { |p| k.downcase.start_with?(p) } }
           framework_routes = controller ? {} : by_controller.select { |k, _| FRAMEWORK_PREFIXES.any? { |p| k.downcase.start_with?(p) } }
 
-          lines = [ "# Routes Summary (#{routes[:total_routes]} total)", "" ]
+          lines = [ "# Routes Summary (#{filtered_total} routes)", "" ]
 
           # Group sibling routes with identical verb patterns (e.g., bonus/*)
           grouped = app_routes.keys.sort.group_by do |ctrl|
@@ -118,7 +119,7 @@ module RailsAiContext
           app_routes = controller ? by_controller : by_controller.reject { |k, _| FRAMEWORK_PREFIXES.any? { |p| k.downcase.start_with?(p) } }
           framework_routes = controller ? {} : by_controller.select { |k, _| FRAMEWORK_PREFIXES.any? { |p| k.downcase.start_with?(p) } }
 
-          lines = [ "# Routes (#{routes[:total_routes]} total)", "" ]
+          lines = [ "# Routes (#{filtered_total} routes)", "" ]
           count = 0
 
           # Group identical sibling route sets (e.g. bonus/*)
@@ -181,7 +182,7 @@ module RailsAiContext
         when "full"
           # Existing full table behavior
           limit ||= 200
-          lines = [ "# Routes Full Detail (#{routes[:total_routes]} total)", "" ]
+          lines = [ "# Routes Full Detail (#{filtered_total} routes)", "" ]
           lines << "| Verb | Path | Controller#Action | Name |"
           lines << "|------|------|-------------------|------|"
           count = 0
