@@ -16,13 +16,21 @@ module RailsAiContext
             type: "string",
             enum: %w[summary standard full],
             description: "Detail level for model listing. summary: names only. standard: names + association/validation counts (default). full: names + full association list. Ignored when specific model is given (always returns full)."
+          },
+          limit: {
+            type: "integer",
+            description: "Max models to return when listing. Default: 50."
+          },
+          offset: {
+            type: "integer",
+            description: "Skip this many models for pagination. Default: 0."
           }
         }
       )
 
       annotations(read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false)
 
-      def self.call(model: nil, detail: "standard", server_context: nil)
+      def self.call(model: nil, detail: "standard", limit: nil, offset: 0, server_context: nil)
         models = cached_context[:models]
         return text_response("Model introspection not available. Add :models to introspectors.") unless models
         return text_response("Model introspection failed: #{models[:error]}") if models[:error]
@@ -36,15 +44,28 @@ module RailsAiContext
           return text_response(format_model(key, data))
         end
 
+        # Pagination
+        total = models.size
+        offset = [ offset.to_i, 0 ].max
+        limit = normalize_limit(limit, 50)
+        all_names = models.keys.sort
+        paginated = all_names.drop(offset).first(limit)
+
+        if paginated.empty? && total > 0
+          return text_response("No models at offset #{offset}. Total: #{total}. Use `offset:0` to start over.")
+        end
+
+        pagination_hint = offset + limit < total ? "\n_Showing #{paginated.size} of #{total}. Use `offset:#{offset + limit}` for more._" : ""
+
         # Listing mode
         case detail
         when "summary"
-          model_list = models.keys.sort.map { |m| "- #{m}" }.join("\n")
-          text_response("# Available models (#{models.size})\n\n#{model_list}\n\n_Use `model:\"Name\"` for full detail._")
+          model_list = paginated.map { |m| "- #{m}" }.join("\n")
+          text_response("# Available models (#{total})\n\n#{model_list}\n\n_Use `model:\"Name\"` for full detail._#{pagination_hint}")
 
         when "standard"
-          lines = [ "# Models (#{models.size})", "" ]
-          models.keys.sort.each do |name|
+          lines = [ "# Models (#{total})", "" ]
+          paginated.each do |name|
             data = models[name]
             next if data[:error]
             assoc_count = (data[:associations] || []).size
@@ -53,12 +74,12 @@ module RailsAiContext
             line += " — #{assoc_count} associations, #{val_count} validations" if assoc_count > 0 || val_count > 0
             lines << line
           end
-          lines << "" << "_Use `model:\"Name\"` for full detail, or `detail:\"full\"` for association lists._"
+          lines << "" << "_Use `model:\"Name\"` for full detail, or `detail:\"full\"` for association lists._#{pagination_hint}"
           text_response(lines.join("\n"))
 
         when "full"
-          lines = [ "# Models (#{models.size})", "" ]
-          models.keys.sort.each do |name|
+          lines = [ "# Models (#{total})", "" ]
+          paginated.each do |name|
             data = models[name]
             next if data[:error]
             assocs = (data[:associations] || []).map { |a| "#{a[:type]} :#{a[:name]}" }.join(", ")
@@ -67,13 +88,19 @@ module RailsAiContext
             line += " — #{assocs}" unless assocs.empty?
             lines << line
           end
-          lines << "" << "_Use `model:\"Name\"` for validations, scopes, callbacks, and more._"
+          lines << "" << "_Use `model:\"Name\"` for validations, scopes, callbacks, and more._#{pagination_hint}"
           text_response(lines.join("\n"))
 
         else
-          model_list = models.keys.sort.map { |m| "- #{m}" }.join("\n")
-          text_response("# Available models (#{models.size})\n\n#{model_list}")
+          model_list = paginated.map { |m| "- #{m}" }.join("\n")
+          text_response("# Available models (#{total})\n\n#{model_list}#{pagination_hint}")
         end
+      end
+
+      private_class_method def self.normalize_limit(limit, default)
+        return default if limit.nil?
+        val = limit.to_i
+        val < 1 ? default : val
       end
 
       private_class_method def self.format_model(name, data)

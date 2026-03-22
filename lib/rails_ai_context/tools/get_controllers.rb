@@ -20,13 +20,21 @@ module RailsAiContext
             type: "string",
             enum: %w[summary standard full],
             description: "Detail level for controller listing. summary: names + action counts. standard: names + action list (default). full: everything. Ignored when specific controller is given."
+          },
+          limit: {
+            type: "integer",
+            description: "Max controllers to return when listing. Default: 50."
+          },
+          offset: {
+            type: "integer",
+            description: "Skip this many controllers for pagination. Default: 0."
           }
         }
       )
 
       annotations(read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false)
 
-      def self.call(controller: nil, action: nil, detail: "standard", server_context: nil)
+      def self.call(controller: nil, action: nil, detail: "standard", limit: nil, offset: 0, server_context: nil)
         data = cached_context[:controllers]
         return text_response("Controller introspection not available. Add :controllers to introspectors.") unless data
         return text_response("Controller introspection failed: #{data[:error]}") if data[:error]
@@ -38,8 +46,13 @@ module RailsAiContext
         app_controller_names = controllers.keys.reject { |name| framework_controllers.include?(name) }.sort
 
         # Specific controller — always full detail (searches ALL controllers including framework)
+        # Flexible matching: "cooks", "CooksController", "cookscontroller" all work
         if controller
-          key = controllers.keys.find { |k| k.downcase == controller.downcase } || controller
+          normalized = controller.downcase.delete_suffix("controller")
+          key = controllers.keys.find { |k|
+            kd = k.downcase
+            kd == controller.downcase || kd.delete_suffix("controller") == normalized
+          } || controller
           info = controllers[key]
           return text_response("Controller '#{controller}' not found. Available: #{app_controller_names.join(', ')}") unless info
           return text_response("Error inspecting #{key}: #{info[:error]}") if info[:error]
@@ -54,33 +67,47 @@ module RailsAiContext
 
         app_controllers = controllers.reject { |name, _| framework_controllers.include?(name) }
 
+        # Pagination
+        total = app_controllers.size
+        offset = [ offset.to_i, 0 ].max
+        limit = limit.nil? ? 50 : [ limit.to_i, 1 ].max
+        all_names = app_controllers.keys.sort
+        paginated_names = all_names.drop(offset).first(limit)
+
+        if paginated_names.empty? && total > 0
+          return text_response("No controllers at offset #{offset}. Total: #{total}. Use `offset:0` to start over.")
+        end
+
+        pagination_hint = offset + limit < total ? "\n_Showing #{paginated_names.size} of #{total}. Use `offset:#{offset + limit}` for more._" : ""
+
         # Listing mode
         case detail
         when "summary"
-          lines = [ "# Controllers (#{app_controllers.size})", "" ]
-          app_controllers.keys.sort.each do |name|
+          lines = [ "# Controllers (#{total})", "" ]
+          paginated_names.each do |name|
             info = app_controllers[name]
             action_count = info[:actions]&.size || 0
             lines << "- **#{name}** — #{action_count} actions"
           end
-          lines << "" << "_Use `controller:\"Name\"` for full detail._"
+          lines << "" << "_Use `controller:\"Name\"` for full detail._#{pagination_hint}"
           text_response(lines.join("\n"))
 
         when "standard"
-          lines = [ "# Controllers (#{app_controllers.size})", "" ]
-          app_controllers.keys.sort.each do |name|
+          lines = [ "# Controllers (#{total})", "" ]
+          paginated_names.each do |name|
             info = app_controllers[name]
             actions = info[:actions]&.join(", ") || "none"
             lines << "- **#{name}** — #{actions}"
           end
-          lines << "" << "_Use `controller:\"Name\"` for filters and strong params, or `detail:\"full\"` for everything._"
+          lines << "" << "_Use `controller:\"Name\"` for filters and strong params, or `detail:\"full\"` for everything._#{pagination_hint}"
           text_response(lines.join("\n"))
 
         when "full"
-          lines = [ "# Controllers (#{app_controllers.size})", "" ]
+          lines = [ "# Controllers (#{total})", "" ]
 
           # Group sibling controllers that share the same parent and identical structure
-          grouped = app_controllers.keys.sort.group_by do |name|
+          paginated_ctrl = app_controllers.select { |k, _| paginated_names.include?(k) }
+          grouped = paginated_ctrl.keys.sort.group_by do |name|
             info = app_controllers[name]
             parent = info[:parent_class]
             # Group by parent + actions + filters + params fingerprint
@@ -121,11 +148,12 @@ module RailsAiContext
               end
             end
           end
+          lines << pagination_hint unless pagination_hint.empty?
           text_response(lines.join("\n"))
 
         else
-          list = app_controllers.keys.sort.map { |c| "- #{c}" }.join("\n")
-          text_response("# Controllers (#{app_controllers.size})\n\n#{list}")
+          list = paginated_names.map { |c| "- #{c}" }.join("\n")
+          text_response("# Controllers (#{total})\n\n#{list}#{pagination_hint}")
         end
       end
 

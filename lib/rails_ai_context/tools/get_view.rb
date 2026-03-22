@@ -70,10 +70,10 @@ module RailsAiContext
             ctrl_templates.sort.each do |name, meta|
               parts = meta[:partials]&.any? ? " renders: #{meta[:partials].join(', ')}" : ""
               stim = meta[:stimulus]&.any? ? " stimulus: #{meta[:stimulus].join(', ')}" : ""
-              lines << "- #{File.basename(name)} (#{meta[:lines]} lines)#{parts}#{stim}"
+              lines << "- #{name} (#{meta[:lines]} lines)#{parts}#{stim}"
             end
             ctrl_partials.sort.each do |name, meta|
-              lines << "- #{File.basename(name)} (#{meta[:lines]} lines)"
+              lines << "- #{name} (#{meta[:lines]} lines)"
             end
             lines << ""
           end
@@ -91,12 +91,12 @@ module RailsAiContext
             ctrl_templates.sort.each do |name, meta|
               parts = meta[:partials]&.any? ? " renders: #{meta[:partials].join(', ')}" : ""
               stim = meta[:stimulus]&.any? ? " stimulus: #{meta[:stimulus].join(', ')}" : ""
-              lines << "- #{File.basename(name)} (#{meta[:lines]} lines)#{parts}#{stim}"
+              lines << "- #{name} (#{meta[:lines]} lines)#{parts}#{stim}"
             end
             ctrl_partials.sort.each do |name, meta|
               fields = meta[:fields]&.any? ? " fields: #{meta[:fields].join(', ')}" : ""
               helpers = meta[:helpers]&.any? ? " helpers: #{meta[:helpers].join(', ')}" : ""
-              lines << "- #{File.basename(name)} (#{meta[:lines]} lines)#{fields}#{helpers}"
+              lines << "- #{name} (#{meta[:lines]} lines)#{fields}#{helpers}"
             end
             lines << ""
           end
@@ -138,6 +138,11 @@ module RailsAiContext
       MAX_FILE_SIZE = 2_000_000 # 2MB safety limit
 
       private_class_method def self.read_view_file(path)
+        # Reject path traversal attempts before any filesystem operation
+        if path.include?("..") || path.start_with?("/")
+          return text_response("Path not allowed: #{path}")
+        end
+
         views_dir = Rails.root.join("app", "views")
         full_path = views_dir.join(path)
 

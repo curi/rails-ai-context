@@ -90,7 +90,7 @@ module RailsAiContext
       end
 
       private_class_method def self.search_with_ripgrep(pattern, search_path, file_type, max_results, root, ctx_lines = 0)
-        cmd = [ "rg", "--no-heading", "--line-number", "--max-count", max_results.to_s ]
+        cmd = [ "rg", "--no-heading", "--line-number", "--sort=path", "--max-count", max_results.to_s ]
         if ctx_lines > 0
           cmd.push("-C", ctx_lines.to_s)
           # Use colon separator for context lines so parse_rg_output handles them correctly

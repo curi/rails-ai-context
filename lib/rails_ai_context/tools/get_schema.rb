@@ -47,24 +47,29 @@ module RailsAiContext
 
         tables = schema[:tables] || {}
 
-        # Single table — always full detail (existing behavior)
-        if table
-          table_data = tables[table]
-          return text_response("Table '#{table}' not found. Available: #{tables.keys.sort.join(', ')}") unless table_data
-          output = format == "json" ? table_data.to_json : format_table_markdown(table, table_data)
-          return text_response(output)
-        end
-
         # Return full JSON if requested (existing behavior)
         return text_response(schema.to_json) if format == "json" && detail == "full"
 
         total = tables.size
         offset = [ offset.to_i, 0 ].max
 
+        # Single table — case-insensitive lookup
+        if table
+          table_key = tables.keys.find { |k| k.downcase == table.downcase } || table
+          table_data = tables[table_key]
+          return text_response("Table '#{table}' not found. Available: #{tables.keys.sort.join(', ')}") unless table_data
+          output = format == "json" ? table_data.to_json : format_table_markdown(table_key, table_data)
+          return text_response(output)
+        end
+
         case detail
         when "summary"
           limit ||= 50
+          limit = 50 if limit.to_i < 1
           paginated = tables.keys.sort.drop(offset).first(limit)
+          if paginated.empty? && total > 0
+            return text_response("No tables at offset #{offset}. Total: #{total}. Use `offset:0` to start over.")
+          end
           lines = [ "# Schema Summary (#{total} tables)", "" ]
           paginated.each do |name|
             data = tables[name]
@@ -77,6 +82,7 @@ module RailsAiContext
 
         when "standard"
           limit ||= 15
+          limit = 15 if limit.to_i < 1
           paginated = tables.keys.sort.drop(offset).first(limit)
           if paginated.empty?
             return text_response("No tables at offset #{offset}. Total tables: #{total}. Use `offset:0` to start from the beginning.")
@@ -96,9 +102,12 @@ module RailsAiContext
           text_response(lines.join("\n"))
 
         when "full"
-          # Existing behavior — but now with optional pagination
           limit ||= 5
+          limit = 5 if limit.to_i < 1
           paginated = tables.keys.sort.drop(offset).first(limit)
+          if paginated.empty? && total > 0
+            return text_response("No tables at offset #{offset}. Total: #{total}. Use `offset:0` to start over.")
+          end
           lines = [ "# Schema Full Detail (#{paginated.size} of #{total} tables)", "" ]
           paginated.each do |name|
             lines << format_table_markdown(name, tables[name])

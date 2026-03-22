@@ -16,36 +16,56 @@ module RailsAiContext
             type: "string",
             enum: %w[summary standard full],
             description: "Detail level. summary: names + counts. standard: names + targets + actions (default). full: everything including values, outlets, classes."
+          },
+          limit: {
+            type: "integer",
+            description: "Max controllers to return when listing. Default: 50."
+          },
+          offset: {
+            type: "integer",
+            description: "Skip this many controllers for pagination. Default: 0."
           }
         }
       )
 
       annotations(read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false)
 
-      def self.call(controller: nil, detail: "standard", server_context: nil)
+      def self.call(controller: nil, detail: "standard", limit: nil, offset: 0, server_context: nil)
         data = cached_context[:stimulus]
         return text_response("Stimulus introspection not available. Add :stimulus to introspectors.") unless data
         return text_response("Stimulus introspection failed: #{data[:error]}") if data[:error]
 
-        controllers = data[:controllers] || []
-        return text_response("No Stimulus controllers found.") if controllers.empty?
+        all_controllers = data[:controllers] || []
+        return text_response("No Stimulus controllers found.") if all_controllers.empty?
 
         # Specific controller — accepts both dash and underscore naming
         # (HTML uses data-controller="weekly-chart", file is weekly_chart_controller.js)
         if controller
           normalized = controller.downcase.tr("-", "_")
-          ctrl = controllers.find { |c| c[:name]&.downcase&.tr("-", "_") == normalized }
-          return text_response("Controller '#{controller}' not found. Available: #{controllers.map { |c| c[:name] }.sort.join(', ')}\n\n_Note: use dashes in HTML (`data-controller=\"my-name\"`) but underscores for lookup (`controller:\"my_name\"`)._") unless ctrl
+          ctrl = all_controllers.find { |c| c[:name]&.downcase&.tr("-", "_") == normalized }
+          return text_response("Controller '#{controller}' not found. Available: #{all_controllers.map { |c| c[:name] }.sort.join(', ')}\n\n_Note: use dashes in HTML (`data-controller=\"my-name\"`) but underscores for lookup (`controller:\"my_name\"`)._") unless ctrl
           return text_response(format_controller_full(ctrl))
         end
 
+        # Pagination
+        total = all_controllers.size
+        offset_val = [ offset.to_i, 0 ].max
+        limit_val = limit.nil? ? 50 : [ limit.to_i, 1 ].max
+        sorted_all = all_controllers.sort_by { |c| c[:name]&.to_s || "" }
+        controllers = sorted_all.drop(offset_val).first(limit_val)
+
+        if controllers.empty? && total > 0
+          return text_response("No controllers at offset #{offset_val}. Total: #{total}. Use `offset:0` to start over.")
+        end
+
+        pagination_hint = offset_val + limit_val < total ? "\n_Showing #{controllers.size} of #{total}. Use `offset:#{offset_val + limit_val}` for more._" : ""
+
         case detail
         when "summary"
-          sorted = controllers.sort_by { |c| c[:name]&.to_s || "" }
-          active = sorted.select { |c| (c[:targets] || []).any? || (c[:actions] || []).any? }
-          empty = sorted.reject { |c| (c[:targets] || []).any? || (c[:actions] || []).any? }
+          active = controllers.select { |c| (c[:targets] || []).any? || (c[:actions] || []).any? }
+          empty = controllers.reject { |c| (c[:targets] || []).any? || (c[:actions] || []).any? }
 
-          lines = [ "# Stimulus Controllers (#{controllers.size})", "" ]
+          lines = [ "# Stimulus Controllers (#{total})", "" ]
           active.each do |ctrl|
             targets = (ctrl[:targets] || []).size
             actions = (ctrl[:actions] || []).size
@@ -55,15 +75,14 @@ module RailsAiContext
             names = empty.map { |c| c[:name] }.join(", ")
             lines << "- _#{names}_ (lifecycle only)"
           end
-          lines << "" << "_Use `controller:\"name\"` for full detail._"
+          lines << "" << "_Use `controller:\"name\"` for full detail._#{pagination_hint}"
           text_response(lines.join("\n"))
 
         when "standard"
-          sorted = controllers.sort_by { |c| c[:name]&.to_s || "" }
-          active = sorted.select { |c| (c[:targets] || []).any? || (c[:actions] || []).any? }
-          empty = sorted.reject { |c| (c[:targets] || []).any? || (c[:actions] || []).any? }
+          active = controllers.select { |c| (c[:targets] || []).any? || (c[:actions] || []).any? }
+          empty = controllers.reject { |c| (c[:targets] || []).any? || (c[:actions] || []).any? }
 
-          lines = [ "# Stimulus Controllers (#{controllers.size})", "" ]
+          lines = [ "# Stimulus Controllers (#{total})", "" ]
           active.each do |ctrl|
             lines << "## #{ctrl[:name]}"
             lines << "- Targets: #{(ctrl[:targets] || []).join(', ')}" if ctrl[:targets]&.any?
@@ -74,12 +93,13 @@ module RailsAiContext
             names = empty.map { |c| c[:name] }.join(", ")
             lines << "_Lifecycle only (no targets/actions): #{names}_"
           end
+          lines << pagination_hint unless pagination_hint.empty?
           text_response(lines.join("\n"))
 
         when "full"
-          lines = [ "# Stimulus Controllers (#{controllers.size})", "" ]
+          lines = [ "# Stimulus Controllers (#{total})", "" ]
           lines << "_HTML naming: `data-controller=\"my-name\"` (dashes in HTML, underscores in filenames)_" << ""
-          controllers.sort_by { |c| c[:name]&.to_s || "" }.each do |ctrl|
+          controllers.each do |ctrl|
             lines << format_controller_full(ctrl) << ""
           end
           text_response(lines.join("\n"))
