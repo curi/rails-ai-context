@@ -74,10 +74,16 @@ module RailsAiContext
                 end
               end
 
-              lines << "**Associations:** #{data[:associations].map { |a| "#{a[:type]} :#{a[:name]}" }.join(', ')}" if data[:associations]&.any?
-              lines << "**Validations:** #{data[:validations].map { |v| "#{v[:kind]} on #{v[:attributes].join(', ')}" }.uniq.join('; ')}" if data[:validations]&.any?
-              lines << "**Scopes:** #{data[:scopes].join(', ')}" if data[:scopes]&.any?
-              lines << "**Enums:** #{data[:enums].map { |k, v| "#{k}: #{v.join(', ')}" }.join('; ')}" if data[:enums]&.any?
+              if data[:associations].is_a?(Array) && data[:associations].any?
+                lines << "**Associations:** #{data[:associations].select { |a| a.is_a?(Hash) }.map { |a| "#{a[:type]} :#{a[:name]}" }.join(', ')}"
+              end
+              if data[:validations].is_a?(Array) && data[:validations].any?
+                lines << "**Validations:** #{data[:validations].select { |v| v.is_a?(Hash) }.map { |v| "#{v[:kind]} on #{Array(v[:attributes]).join(', ')}" }.uniq.join('; ')}"
+              end
+              lines << "**Scopes:** #{data[:scopes].join(', ')}" if data[:scopes].is_a?(Array) && data[:scopes].any?
+              if data[:enums].is_a?(Hash) && data[:enums].any?
+                lines << "**Enums:** #{data[:enums].map { |k, v| "#{k}: #{Array(v).join(', ')}" }.join('; ')}"
+              end
             end
           else
             lines << "## Models" << "_No models matching '#{pattern}'._"
@@ -90,7 +96,7 @@ module RailsAiContext
         # --- AF: Controllers ---
         def discover_controllers(ctx, pattern, lines)
           controllers = ctx.dig(:controllers, :controllers) || {}
-          matched = controllers.select { |name, data| !data[:error] && name.downcase.include?(pattern) }
+          matched = controllers.select { |name, data| data.is_a?(Hash) && !data[:error] && name.downcase.include?(pattern) }
 
           if matched.any?
             lines << "## Controllers (#{matched.size})"
@@ -98,10 +104,10 @@ module RailsAiContext
               actions = info[:actions]&.join(", ") || "none"
               lines << "" << "### #{name}"
               lines << "- **Actions:** #{actions}"
-              filters = (info[:filters] || []).map do |f|
+              filters = (info[:filters] || []).select { |f| f.is_a?(Hash) }.map do |f|
                 label = "#{f[:kind]} #{f[:name]}"
-                label += " only: #{f[:only].join(', ')}" if f[:only]&.any?
-                label += " except: #{f[:except].join(', ')}" if f[:except]&.any?
+                label += " only: #{Array(f[:only]).join(', ')}" if f[:only]&.any?
+                label += " except: #{Array(f[:except]).join(', ')}" if f[:except]&.any?
                 label += " unless: #{f[:unless]}" if f[:unless]
                 label
               end
@@ -266,7 +272,9 @@ module RailsAiContext
 
           related = {}
           matched_models.each do |name, data|
+            next unless data.is_a?(Hash)
             (data[:associations] || []).each do |a|
+              next unless a.is_a?(Hash)
               related_name = a[:class_name] || a[:name].to_s.classify
               next if matched_models.key?(related_name)
               related[related_name] ||= []
@@ -286,7 +294,9 @@ module RailsAiContext
 
           concerns = {}
           matched_models.each do |_name, data|
+            next unless data.is_a?(Hash)
             (data[:concerns] || []).each do |c|
+              next unless c.is_a?(String)
               next if c.include?("::") || %w[Kernel JSON PP].include?(c)
               concerns[c] ||= 0
               concerns[c] += 1
@@ -297,6 +307,8 @@ module RailsAiContext
           lines << "## Concerns"
           concerns.sort.each { |name, count| lines << "- **#{name}** (used by #{count} model#{'s' if count > 1})" }
           lines << ""
+        rescue
+          nil
         end
 
         # --- AF13: Callback Chains ---
@@ -305,7 +317,9 @@ module RailsAiContext
 
           callbacks = []
           matched_models.each do |name, data|
+            next unless data.is_a?(Hash)
             (data[:callbacks] || {}).each do |type, methods|
+              next unless methods.is_a?(Array)
               methods.each { |m| callbacks << "#{name}: #{type} :#{m}" }
             end
           end
