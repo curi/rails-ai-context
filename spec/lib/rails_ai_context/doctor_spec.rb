@@ -26,13 +26,18 @@ RSpec.describe RailsAiContext::Doctor do
       expect(names).to include("Schema")
     end
 
-    it "includes new v0.4.0 checks" do
+    it "includes core checks" do
       names = result[:checks].map(&:name)
-      expect(names).to include("Controllers", "Views", "I18n", "Tests")
+      expect(names).to include("Controllers", "Views", "Tests", "MCP server")
     end
 
-    it "runs 13 total checks" do
-      expect(result[:checks].size).to eq(13)
+    it "includes deep checks" do
+      names = result[:checks].map(&:name)
+      expect(names).to include("Context files", "Preset coverage", "Secrets in .gitignore", "MCP auto_mount")
+    end
+
+    it "runs at least 15 checks" do
+      expect(result[:checks].size).to be >= 15
     end
 
     it "checks MCP server buildability" do
@@ -46,6 +51,17 @@ RSpec.describe RailsAiContext::Doctor do
         expect(check.message).to be_a(String)
         expect(%i[pass warn fail]).to include(check.status)
       end
+    end
+
+    it "checks security settings" do
+      auto_mount = result[:checks].find { |c| c.name == "MCP auto_mount" }
+      expect(auto_mount).not_to be_nil
+      expect(auto_mount.status).to eq(:pass)
+    end
+
+    it "checks preset coverage" do
+      preset = result[:checks].find { |c| c.name == "Preset coverage" }
+      expect(preset).not_to be_nil
     end
   end
 end
