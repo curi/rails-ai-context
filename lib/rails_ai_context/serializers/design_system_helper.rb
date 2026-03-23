@@ -92,7 +92,7 @@ module RailsAiContext
         scheme = patterns[:color_scheme] || {}
         return [] if scheme.empty? && (design_tokens.nil? || design_tokens[:error])
 
-        lines = ["### Colors"]
+        lines = [ "### Colors" ]
 
         # Semantic roles
         lines << "- **Primary:** #{scheme[:primary]} — use for CTAs, active states, links" if scheme[:primary]
@@ -120,7 +120,7 @@ module RailsAiContext
       end
 
       def render_component_guide(components)
-        lines = ["### Components — Copy These Patterns"]
+        lines = [ "### Components — Copy These Patterns" ]
 
         by_type = components.group_by { |c| c[:type] }
 
@@ -138,7 +138,7 @@ module RailsAiContext
         typo = patterns[:typography] || {}
         return [] if typo.empty?
 
-        lines = ["### Typography"]
+        lines = [ "### Typography" ]
 
         if typo[:heading_styles]&.any?
           typo[:heading_styles].each do |tag, classes|
@@ -163,7 +163,7 @@ module RailsAiContext
         fl = patterns[:form_layout] || {}
         return [] if layout.empty? && fl.empty?
 
-        lines = ["### Layout & Spacing"]
+        lines = [ "### Layout & Spacing" ]
 
         lines << "- Container: #{layout[:containers].keys.first(2).join(', ')}" if layout[:containers]&.any?
         lines << "- Grid: #{layout[:grid].keys.first(3).join(', ')}" if layout[:grid]&.any?
@@ -178,7 +178,7 @@ module RailsAiContext
         states = patterns[:interactive_states] || {}
         return [] if states.empty?
 
-        lines = ["### Interactive States"]
+        lines = [ "### Interactive States" ]
 
         %w[hover focus active disabled].each do |state|
           next unless states[state]&.any?
@@ -194,7 +194,7 @@ module RailsAiContext
         dark = patterns[:dark_mode] || {}
         return [] unless dark[:used]
 
-        lines = ["### Dark Mode"]
+        lines = [ "### Dark Mode" ]
         lines << "- Active — use `dark:` prefix for all color-dependent classes"
         lines << "- Common: #{dark[:patterns].keys.first(5).join(', ')}" if dark[:patterns]&.any?
         lines << ""
@@ -202,7 +202,7 @@ module RailsAiContext
       end
 
       def render_design_rules(patterns)
-        lines = ["### Design Rules"]
+        lines = [ "### Design Rules" ]
 
         responsive = patterns[:responsive] || {}
         lines << "- Always add responsive breakpoints (mobile-first with md: and lg: variants)" if responsive.any?
