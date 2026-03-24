@@ -64,4 +64,141 @@ RSpec.describe RailsAiContext::Tools::Validate do
       expect(text).to include("2/2 files passed")
     end
   end
+
+  describe "JavaScript fallback validator" do
+    let(:tmp_dir) { File.join(Rails.root, "tmp") }
+
+    before { FileUtils.mkdir_p(tmp_dir) }
+
+    def validate_js(content)
+      path = File.join(tmp_dir, "js_fallback_test.js")
+      File.write(path, content)
+      described_class.send(:validate_javascript_fallback, Pathname.new(path))
+    ensure
+      File.delete(path) if File.exist?(path)
+    end
+
+    # ── Bracket matching ──────────────────────────────────────────
+
+    it "passes valid JavaScript with matched brackets" do
+      ok, = validate_js('function foo() { return [1, 2]; }')
+      expect(ok).to be true
+    end
+
+    it "detects unmatched opening brace" do
+      ok, msg = validate_js('function foo() {')
+      expect(ok).to be false
+      expect(msg).to include("unmatched")
+    end
+
+    it "detects unmatched closing brace" do
+      ok, msg = validate_js('var x = 1; }')
+      expect(ok).to be false
+      expect(msg).to include("unmatched '}'")
+    end
+
+    it "detects mismatched bracket types" do
+      ok, msg = validate_js('function foo() { return [1, 2); }')
+      expect(ok).to be false
+      expect(msg).to include("unmatched")
+    end
+
+    it "passes nested brackets" do
+      ok, = validate_js('var x = { a: [1, (2 + 3)], b: { c: 4 } };')
+      expect(ok).to be true
+    end
+
+    # ── String handling ───────────────────────────────────────────
+
+    it "ignores brackets inside double-quoted strings" do
+      ok, = validate_js('var x = "{ [ ( } ] )";')
+      expect(ok).to be true
+    end
+
+    it "ignores brackets inside single-quoted strings" do
+      ok, = validate_js("var x = '{ [ ( } ] )';")
+      expect(ok).to be true
+    end
+
+    it "ignores brackets inside template literals" do
+      ok, = validate_js('var x = `{ [ ( } ] )`;')
+      expect(ok).to be true
+    end
+
+    it "handles escaped quotes inside strings" do
+      ok, = validate_js('var x = "hello \\"world\\"";')
+      expect(ok).to be true
+    end
+
+    it "handles escaped backslash before closing quote (the \\\\\" bug)" do
+      # In JavaScript: "hello\\" means string contains hello\ and the " closes it.
+      # The \\ is an escaped backslash, NOT an escape for the closing quote.
+      ok, = validate_js('var x = "hello\\\\"; var y = 1;')
+      expect(ok).to be true
+    end
+
+    it "handles escaped backslash before closing quote with brackets after" do
+      # This is the key regression test: "path\\" followed by { should not
+      # treat the { as being inside the string
+      ok, = validate_js('var x = "path\\\\"; if (true) { console.log(x); }')
+      expect(ok).to be true
+    end
+
+    it "handles multiple escaped backslashes before closing quote" do
+      # "\\\\" is four backslashes = two escaped backslashes, quote closes
+      ok, = validate_js('var x = "test\\\\\\\\"; var y = [];')
+      expect(ok).to be true
+    end
+
+    it "handles odd backslashes before quote (quote IS escaped)" do
+      # "hello\\\"world" = escaped backslash + escaped quote + world + closing quote
+      ok, = validate_js('var x = "hello\\\\\\"world";')
+      expect(ok).to be true
+    end
+
+    it "does not false-positive when bracket char follows escaped-backslash string" do
+      # This is the definitive regression test for the escaped backslash bug.
+      # JS: var x = "test\\"; var y = ")";
+      # "test\\" closes after the escaped backslash. ")" is a separate string.
+      # Old code (prev_char check) keeps the first string open, then when it
+      # hits the " before ), the string closes, exposing ) as a bare bracket
+      # → false positive "unmatched ')'"
+      ok, = validate_js('var x = "test\\\\"; var y = ")";')
+      expect(ok).to be true
+    end
+
+    # ── Comment handling ──────────────────────────────────────────
+
+    it "ignores brackets inside line comments" do
+      ok, = validate_js("var x = 1; // { [ (\n")
+      expect(ok).to be true
+    end
+
+    it "ignores brackets inside block comments" do
+      ok, = validate_js("var x = 1; /* { [ ( */ var y = 2;")
+      expect(ok).to be true
+    end
+
+    it "does not treat // inside a string as a comment" do
+      ok, = validate_js('var x = "http://example.com"; var y = {};')
+      expect(ok).to be true
+    end
+
+    it "does not treat /* inside a string as a block comment" do
+      ok, = validate_js('var x = "/* not a comment */"; var y = {};')
+      expect(ok).to be true
+    end
+
+    # ── Empty / whitespace ────────────────────────────────────────
+
+    it "passes an empty file" do
+      ok, = validate_js("")
+      expect(ok).to be true
+    end
+
+    it "passes a file with only comments" do
+      ok, = validate_js("// just a comment\n/* block */\n")
+      expect(ok).to be true
+    end
+  end
 end

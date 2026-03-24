@@ -214,12 +214,18 @@ module RailsAiContext
         stack = []
         openers = { "{" => "}", "[" => "]", "(" => ")" }
         closers = { "}" => "{", "]" => "[", ")" => "(" }
-        in_string = nil; in_line_comment = false; in_block_comment = false; prev_char = nil
+        in_string = nil; in_line_comment = false; in_block_comment = false; escaped = false; prev_char = nil
 
         content.each_char.with_index do |char, i|
           if in_line_comment then (in_line_comment = false if char == "\n"); prev_char = char; next end
           if in_block_comment then (in_block_comment = false if prev_char == "*" && char == "/"); prev_char = char; next end
-          if in_string then (in_string = nil if char == in_string && prev_char != "\\"); prev_char = char; next end
+          if in_string
+            if escaped then escaped = false
+            elsif char == "\\" then escaped = true
+            elsif char == in_string then in_string = nil
+            end
+            prev_char = char; next
+          end
 
           case char
           when '"', "'", "`" then in_string = char
