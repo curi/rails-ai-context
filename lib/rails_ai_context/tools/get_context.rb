@@ -94,9 +94,67 @@ module RailsAiContext
           lines << view_text
         end
 
+        # Cross-reference: controller ivars vs view ivars
+        ctrl_ivars = extract_ivars_from_text(ctrl_result.content.first[:text])
+        view_ivars = extract_ivars_from_view_text(view_text)
+        ivar_check = cross_reference_ivars(ctrl_ivars, view_ivars)
+        lines << "" << ivar_check if ivar_check
+
         text_response(lines.join("\n"))
       rescue => e
         text_response("Error assembling context: #{e.message}")
+      end
+
+      private_class_method def self.extract_ivars_from_text(text)
+        # Extract from "## Instance Variables\n- @foo\n- @bar" section
+        ivars = Set.new
+        in_section = false
+        text.each_line do |line|
+          if line.include?("Instance Variables")
+            in_section = true
+            next
+          end
+          if in_section
+            break unless line.strip.start_with?("- ")
+            match = line.match(/@(\w+)/)
+            ivars << match[1] if match
+          end
+        end
+        ivars
+      end
+
+      private_class_method def self.extract_ivars_from_view_text(text)
+        # Extract from "ivars: foo, bar, baz" in view listing
+        ivars = Set.new
+        text.each_line do |line|
+          if (match = line.match(/ivars:\s*(.+?)(?:\s+turbo:|$)/))
+            match[1].split(",").each { |v| ivars << v.strip }
+          end
+        end
+        ivars
+      end
+
+      private_class_method def self.cross_reference_ivars(ctrl_ivars, view_ivars)
+        return nil if ctrl_ivars.empty? && view_ivars.empty?
+
+        lines = [ "## Instance Variable Cross-Check" ]
+        all = (ctrl_ivars | view_ivars).sort
+
+        mismatches = false
+        all.each do |ivar|
+          in_ctrl = ctrl_ivars.include?(ivar)
+          in_view = view_ivars.include?(ivar)
+          if in_ctrl && in_view
+            lines << "- \\u2713 @#{ivar} — set in controller, used in view"
+          elsif in_view && !in_ctrl
+            lines << "- \\u2717 @#{ivar} — used in view but NOT set in controller"
+            mismatches = true
+          elsif in_ctrl && !in_view
+            lines << "- \\u26A0 @#{ivar} — set in controller but not used in view"
+          end
+        end
+
+        mismatches || all.any? ? lines.join("\n") : nil
       end
 
       private_class_method def self.controller_context(controller_name)

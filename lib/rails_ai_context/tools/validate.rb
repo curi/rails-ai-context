@@ -401,6 +401,7 @@ module RailsAiContext
           warnings.concat(check_missing_fk_index(file, context))
           warnings.concat(check_route_action_consistency(file, context))
           warnings.concat(check_turbo_stream_channels(file, content, context))
+          warnings.concat(check_memory_loading(file, content)) if file.start_with?("app/controllers/")
         end
 
         warnings
@@ -919,6 +920,31 @@ module RailsAiContext
           warnings << "#{file} uses turbo_stream_from but #{turbo_template} doesn't exist (Turbo Stream updates may need this)"
         end
         warnings
+      rescue
+        []
+      end
+
+      # ── CHECK: Memory-loading anti-pattern ───────────────────────────
+      MEMORY_LOAD_METHODS = %w[map filter_map flat_map select reject collect reduce inject each_with_object].freeze
+
+      private_class_method def self.check_memory_loading(file, content)
+        warnings = []
+        content.each_line.with_index(1) do |line, num|
+          stripped = line.strip
+          next if stripped.start_with?("#")
+
+          MEMORY_LOAD_METHODS.each do |method|
+            # Match: .scope.ruby_method{ or .scope.ruby_method do
+            next unless stripped.match?(/\.\w+\.#{method}\s*[\{\(]/) || stripped.match?(/\.\w+\.#{method}\s+do\b/)
+            # Skip if it's clearly not an AR chain (e.g., array.map)
+            next if stripped.match?(/\[\]\.#{method}/) || stripped.match?(/\.to_a\.#{method}/)
+            # Skip if preceded by pluck/select (already optimized)
+            next if stripped.match?(/\.pluck\(.*\)\.#{method}/) || stripped.match?(/\.select\(.*\)\.#{method}/)
+            warnings << "line #{num}: scope chain followed by .#{method} may load all records into memory — consider .pluck or SQL"
+            break # one warning per line
+          end
+        end
+        warnings.first(3) # cap at 3 to avoid noise
       rescue
         []
       end

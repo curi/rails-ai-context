@@ -160,6 +160,7 @@ module RailsAiContext
         flash_alerts = []
         not_found_patterns = []
         create_flows = []
+        show_only_controllers = []
         has_services = Dir.exist?(Rails.root.join("app", "services"))
 
         Dir.glob(File.join(controllers_dir, "**", "*.rb")).each do |path|
@@ -212,6 +213,13 @@ module RailsAiContext
               end
             end
           end
+
+          # Read-only page detection: controllers with show but no create/update/destroy
+          has_show = content.match?(/def\s+show\b/)
+          has_write = content.match?(/def\s+(create|update|destroy)\b/)
+          if has_show && !has_write
+            show_only_controllers << controller_name.camelize.sub(/Controller$/, "")
+          end
         end
 
         sections = []
@@ -256,6 +264,26 @@ module RailsAiContext
           sections << "Detected in: #{create_flows.map { |f| f.split(':').first }.join(', ')}"
         end
 
+        if show_only_controllers.any?
+          sections << "" << "### Read-Only Page Pattern (follow this for dashboard/analytics/report pages)"
+          sections << "```ruby"
+          sections << "# Route: get \"analytics\", to: \"analytics#show\""
+          sections << "#"
+          sections << "class AnalyticsController < ApplicationController"
+          sections << "  def show"
+          sections << "    @records = current_user.[association].[scope]"
+          sections << "    @stats = current_user.[association].[aggregation]"
+          sections << "  end"
+          sections << "end"
+          sections << "```"
+          sections << ""
+          sections << "Detected in: #{show_only_controllers.join(', ')}"
+        end
+
+        # Test pattern detection
+        test_pattern = detect_test_pattern
+        sections.concat(test_pattern) if test_pattern.any?
+
         if has_services
           service_files = Dir.glob(Rails.root.join("app", "services", "**", "*.rb"))
           if service_files.any?
@@ -270,6 +298,63 @@ module RailsAiContext
         sections
       rescue => e
         [] # Graceful degradation — never break the tool
+      end
+
+      private_class_method def self.detect_test_pattern
+        sections = []
+        test_dir = Rails.root.join("test", "controllers")
+        return sections unless Dir.exist?(test_dir)
+
+        test_files = Dir.glob(File.join(test_dir, "**", "*_test.rb"))
+        return sections if test_files.empty?
+
+        has_devise = false
+        has_sign_in = false
+        has_assert_select = false
+        has_assert_response = false
+        has_auth_test = false
+        detected_in = []
+
+        test_files.first(5).each do |path|
+          content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace) rescue next
+          has_devise = true if content.include?("Devise::Test::IntegrationHelpers")
+          has_sign_in = true if content.include?("sign_in")
+          has_assert_select = true if content.include?("assert_select")
+          has_assert_response = true if content.include?("assert_response")
+          has_auth_test = true if content.match?(/requires?\s+authentication/i)
+          detected_in << File.basename(path, ".rb").camelize.sub(/Test$/, "")
+        end
+
+        return sections unless has_assert_response
+
+        sections << "" << "### Controller Test Pattern (follow this for new tests)"
+        sections << "```ruby"
+        sections << "require \"test_helper\""
+        sections << ""
+        sections << "class [Feature]ControllerTest < ActionDispatch::IntegrationTest"
+        sections << "  include Devise::Test::IntegrationHelpers" if has_devise
+        sections << ""
+        if has_auth_test
+          sections << "  test \"requires authentication\" do"
+          sections << "    get [path]"
+          sections << "    assert_response :redirect"
+          sections << "  end"
+          sections << ""
+        end
+        sections << "  test \"[action] renders page\" do"
+        sections << "    sign_in users(:chef_one)" if has_sign_in
+        sections << "    get [path]"
+        sections << "    assert_response :success"
+        sections << "    assert_select \"h1\", \"[Expected Title]\"" if has_assert_select
+        sections << "  end"
+        sections << "end"
+        sections << "```"
+        sections << ""
+        sections << "Detected from: #{detected_in.first(3).join(', ')}"
+
+        sections
+      rescue
+        []
       end
     end
   end

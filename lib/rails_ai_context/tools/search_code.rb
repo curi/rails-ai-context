@@ -62,10 +62,14 @@ module RailsAiContext
         # Apply exact_match word boundaries
         pattern = "\\b#{pattern}\\b" if exact_match
 
-        # Apply match_type filter to pattern
+        # Apply match_type filter to pattern (strip keyword if user already included it)
         pattern = case match_type
-        when "definition" then "^\\s*def\\s+(self\\.)?#{pattern}"
-        when "class" then "^\\s*(class|module)\\s+#{pattern}"
+        when "definition"
+          cleaned = pattern.sub(/\A\s*def\s+/, "")
+          "^\\s*def\\s+(self\\.)?#{cleaned}"
+        when "class"
+          cleaned = pattern.sub(/\A\s*(class|module)\s+/, "")
+          "^\\s*(class|module)\\s+#{cleaned}"
         else pattern
         end
 

@@ -46,6 +46,9 @@ module RailsAiContext
         lines.concat(render_components(components, detail))
 
         if %w[standard full].include?(detail)
+          # Layout patterns (stat cards, progress bars, section headers)
+          lines.concat(render_layout_patterns)
+
           # Canonical page examples (real HTML snippets)
           lines.concat(render_canonical_examples(patterns))
 
@@ -269,6 +272,63 @@ module RailsAiContext
           end
 
           lines
+        end
+
+        def render_layout_patterns
+          lines = []
+          views_dir = Rails.root.join("app", "views")
+          return lines unless Dir.exist?(views_dir)
+
+          has_stat_card = false
+          has_progress_bar = false
+          has_section_header = false
+
+          Dir.glob(File.join(views_dir, "**", "*.html.erb")).each do |path|
+            content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace) rescue next
+            has_stat_card = true if content.match?(/text-3xl\s+font-bold.*text-gray-900/) && content.match?(/text-sm\s+text-gray-500/)
+            has_progress_bar = true if content.match?(/bg-gray-\d+\s+rounded-full\s+h-\d/) && content.match?(/bg-orange-\d+\s+h-\d+\s+rounded-full/)
+            has_section_header = true if content.match?(/flex.*justify-between.*items-center/) && content.match?(/text-lg\s+font-semibold/)
+          end
+
+          return lines unless has_stat_card || has_progress_bar || has_section_header
+
+          lines << "## Layout Patterns — Copy These Structures" << ""
+
+          if has_stat_card
+            lines << "**Stat Card Grid** (CANONICAL):"
+            lines << "```erb"
+            lines << '<div class="grid grid-cols-2 lg:grid-cols-4 gap-4">'
+            lines << '  <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">'
+            lines << '    <div class="text-sm text-gray-500 mb-1">Label</div>'
+            lines << '    <div class="text-3xl font-bold text-gray-900">Value</div>'
+            lines << '    <div class="text-xs text-gray-400 mt-1">Subtext</div>'
+            lines << "  </div>"
+            lines << "</div>"
+            lines << "```" << ""
+          end
+
+          if has_section_header
+            lines << "**Section Header with Action** (CANONICAL):"
+            lines << "```erb"
+            lines << '<div class="flex justify-between items-center mb-4">'
+            lines << '  <h2 class="text-lg font-semibold">Section Title</h2>'
+            lines << '  <%= link_to "View All", path, class: "text-orange-600 text-sm font-medium hover:text-orange-700" %>'
+            lines << "</div>"
+            lines << "```" << ""
+          end
+
+          if has_progress_bar
+            lines << "**Progress Bar** (CANONICAL):"
+            lines << "```erb"
+            lines << '<div class="w-32 bg-gray-100 rounded-full h-2">'
+            lines << '  <div class="bg-orange-500 h-2 rounded-full" style="width: <%= percentage %>%"></div>'
+            lines << "</div>"
+            lines << "```" << ""
+          end
+
+          lines
+        rescue
+          []
         end
 
         def render_rules(patterns)
