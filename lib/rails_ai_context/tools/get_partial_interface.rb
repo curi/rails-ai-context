@@ -272,24 +272,26 @@ module RailsAiContext
           new_record? persisted? errors model_name
         ])
 
-        # Scan ERB output tags and code tags for local variable usage
+        # Scan ERB tags for local variable usage — strict detection only
         source.scan(/<%[=\-]?\s*(.+?)\s*-?%>/m).each do |match|
           code = match[0]
-          # Skip comments
           next if code.start_with?("#")
 
-          # Find bare identifiers that look like local variables:
-          # - Start with lowercase letter or underscore
-          # - Used as standalone, as method receiver (local.method), or passed as argument
-          code.scan(/\b([a-z_]\w*)\b/).each do |var_match|
-            name = var_match[0]
-            next if known_non_locals.include?(name)
-            next if name.match?(/\A_/) && name.length == 1 # single underscore
-            next if name.match?(/\A(do|end|in|or|and|not|if|then|else)\z/)
+          # Only detect variables used as Ruby method receivers with proper method syntax:
+          # local.method_name, local&.method, local.method?, local.method!
+          # Require the method to contain underscore, end with ?/!, or have parens — filters English phrases
+          code.scan(/\b([a-z_]\w*)\s*&?\.\s*([a-z_]\w*[?!]?)/).each do |var, method|
+            next if known_non_locals.include?(var)
+            next if var.match?(/\A(do|end|in|or|and|not|if|then|else)\z/)
+            # Only accept if method looks like a real Ruby method (has underscore, ends with ?/!, has parens after)
+            is_real_method = method.include?("_") || method.end_with?("?") || method.end_with?("!") ||
+                             code.include?("#{var}.#{method}(") || %w[id name class type size count new to_s to_i].include?(method)
+            locals << var if is_real_method
+          end
 
-            # Check if it's used as a variable (not just a method call with no receiver)
-            # Include if: used with dot (local.method), or appears standalone
-            locals << name
+          # Detect variables used with `defined?(local)` guard pattern
+          code.scan(/defined\?\s*\(?([a-z_]\w*)\)?/).each do |var_match|
+            locals << var_match[0]
           end
         end
 

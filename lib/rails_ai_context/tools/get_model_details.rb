@@ -278,29 +278,36 @@ module RailsAiContext
           end
         end
 
-        # Class methods (e.g. Plan.free, Plan.pro)
-        if data[:class_methods]&.any?
+        # Class methods — only show methods defined in the actual model file
+        source_class_methods = extract_source_defined_methods(name, class_methods: true)
+        if source_class_methods&.any?
           lines << "" << "## Class methods"
-          lines << data[:class_methods].first(25).map { |m| "- `#{m}`" }.join("\n")
+          source_class_methods.first(25).each { |m| lines << "- `#{m}`" }
+        elsif data[:class_methods]&.any?
+          # Fallback: filter obvious framework methods
+          app_class_methods = data[:class_methods].reject { |m| m.match?(/\A(find_for_|find_or_|devise_|new_with_session|http_auth|params_auth|case_insensitive|expire_all|extend_remember|strip_whitespace|email_regexp|omniauth_providers)/) }
+          if app_class_methods.any?
+            lines << "" << "## Class methods"
+            lines << app_class_methods.first(25).map { |m| "- `#{m}`" }.join("\n")
+          end
         end
 
-        # Key instance methods — include signatures from source if available
-        if data[:instance_methods]&.any?
+        # Key instance methods — only from source file, not framework-inherited
+        source_instance_methods = extract_method_signatures(name)
+        if source_instance_methods&.any?
           lines << "" << "## Key instance methods"
-          signatures = extract_method_signatures(name)
-          if signatures&.any?
-            signatures.first(25).each { |s| lines << "- `#{s}`" }
-          else
-            # Filter out association-generated methods (getters, setters, build_, create_)
-            assoc_names = (data[:associations] || []).flat_map do |a|
-              n = a[:name].to_s
-              [ n, "#{n}=", "build_#{n}", "create_#{n}", "reload_#{n}", "reset_#{n}",
-               "#{n}_ids", "#{n}_ids=", "#{n.singularize}_ids", "#{n.singularize}_ids=" ]
-            end
-            filtered = data[:instance_methods].reject { |m| assoc_names.include?(m) || m.end_with?("=") }
-            if filtered.any?
-              lines << filtered.first(25).map { |m| "- `#{m}`" }.join("\n")
-            end
+          source_instance_methods.first(25).each { |s| lines << "- `#{s}`" }
+        elsif data[:instance_methods]&.any?
+          lines << "" << "## Key instance methods"
+          # Fallback: filter association-generated and framework methods
+          assoc_names = (data[:associations] || []).flat_map do |a|
+            n = a[:name].to_s
+            [ n, "#{n}=", "build_#{n}", "create_#{n}", "reload_#{n}", "reset_#{n}",
+             "#{n}_ids", "#{n}_ids=", "#{n.singularize}_ids", "#{n.singularize}_ids=" ]
+          end
+          filtered = data[:instance_methods].reject { |m| assoc_names.include?(m) || m.end_with?("=") }
+          if filtered.any?
+            lines << filtered.first(25).map { |m| "- `#{m}`" }.join("\n")
           end
         end
 
@@ -313,6 +320,27 @@ module RailsAiContext
         lines << "" << "_Next: #{hints.join(' | ')}_"
 
         lines.join("\n")
+      end
+
+      # Extract class methods defined in the model source (not inherited)
+      private_class_method def self.extract_source_defined_methods(model_name, class_methods: false)
+        path = Rails.root.join("app", "models", "#{model_name.underscore}.rb")
+        return nil unless File.exist?(path)
+        return nil if File.size(path) > max_file_size
+
+        source = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+        methods = []
+        pattern = class_methods ? /\A\s*def\s+self\.(\w+[?!]?(?:\([^)]*\))?)/ : /\A\s*def\s+((?!self\.)[\w?!]+(?:\([^)]*\))?)/
+
+        source.each_line do |line|
+          if (match = line.match(pattern))
+            methods << match[1]
+          end
+        end
+
+        methods.empty? ? nil : methods
+      rescue
+        nil
       end
 
       # Extract public method signatures (name + params) from model source

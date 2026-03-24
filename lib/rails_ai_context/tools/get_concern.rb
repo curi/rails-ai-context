@@ -363,7 +363,7 @@ module RailsAiContext
         # Build pattern: match `include ConcernName` or `include ModuleName::ConcernName`
         # Handle both simple and namespaced concern names
         simple_name = concern_name.demodulize
-        pattern = /\A\s*include\s+(?:\w+::)*#{Regexp.escape(simple_name)}\b/
+        pattern = /^\s*include\s+(?:\w+::)*#{Regexp.escape(simple_name)}\b/
 
         search_dirs.each do |dir|
           next unless Dir.exist?(dir)
@@ -375,7 +375,7 @@ module RailsAiContext
             source = File.read(file_path, encoding: "UTF-8", invalid: :replace, undef: :replace) rescue next
             if source.match?(pattern)
               # Extract the class/module name from the file
-              class_match = source.match(/\A\s*class\s+(\S+)/m) || source.match(/\A\s*module\s+(\S+)/m)
+              class_match = source.match(/^\s*class\s+(\S+)/) || source.match(/^\s*module\s+(\S+)/)
               class_name = class_match ? class_match[1] : File.basename(file_path, ".rb").camelize
               includers << class_name
             end
