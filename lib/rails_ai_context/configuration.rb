@@ -72,6 +72,9 @@ module RailsAiContext
     # Additional MCP tool classes to register alongside built-in tools
     attr_accessor :custom_tools
 
+    # Built-in tool names to skip (e.g. %w[rails_security_scan rails_get_design_system])
+    attr_accessor :skip_tools
+
     # Filtering — customize what's hidden from AI output
     attr_accessor :excluded_controllers   # Controller classes hidden from listings (e.g. DeviseController)
     attr_accessor :excluded_route_prefixes # Route controller prefixes hidden with app_only (e.g. action_mailbox/)
@@ -144,6 +147,7 @@ module RailsAiContext
         Rack::MethodOverride ActionDispatch::Session::AbstractSecureStore
       ]
       @custom_tools             = []
+      @skip_tools               = []
       @search_extensions        = %w[rb js erb yml yaml json ts tsx vue svelte haml slim]
       @concern_paths            = %w[app/models/concerns app/controllers/concerns]
     end

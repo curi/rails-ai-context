@@ -97,6 +97,26 @@ RSpec.describe "MCP Tool Integration" do
     end
   end
 
+  describe "skip_tools" do
+    after { RailsAiContext.configuration.skip_tools = [] }
+
+    it "excludes tools by name" do
+      RailsAiContext.configuration.skip_tools = %w[rails_security_scan rails_get_design_system]
+
+      server = RailsAiContext::Server.new(Rails.application).build
+
+      expect(server.tools.keys).not_to include("rails_security_scan")
+      expect(server.tools.keys).not_to include("rails_get_design_system")
+      expect(server.tools.size).to eq(14)
+    end
+
+    it "defaults to no skipped tools" do
+      server = RailsAiContext::Server.new(Rails.application).build
+
+      expect(server.tools.size).to eq(16)
+    end
+  end
+
   describe "maybe_start_live_reload" do
     let(:server_wrapper) { RailsAiContext::Server.new(Rails.application) }
     let(:mcp_server) { server_wrapper.build }

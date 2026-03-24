@@ -39,7 +39,7 @@ module RailsAiContext
       server = MCP::Server.new(
         name: config.server_name,
         version: config.server_version,
-        tools: TOOLS + config.custom_tools
+        tools: active_tools(config) + config.custom_tools
       )
 
       Resources.register(server)
@@ -62,6 +62,13 @@ module RailsAiContext
     end
 
     private
+
+    def active_tools(config)
+      skip = config.skip_tools
+      return TOOLS if skip.empty?
+
+      TOOLS.reject { |t| skip.include?(t.tool_name) }
+    end
 
     def start_stdio(server)
       transport = MCP::Server::Transports::StdioTransport.new(server)
