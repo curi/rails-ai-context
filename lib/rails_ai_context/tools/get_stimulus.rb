@@ -149,22 +149,23 @@ module RailsAiContext
       end
 
       private_class_method def self.generate_html_attrs(ctrl)
-        name = ctrl[:name]
+        # Stimulus uses dashes in HTML, underscores only in filenames
+        html_name = ctrl[:name].tr("_", "-")
         attrs = []
-        attrs << "data-controller=\"#{name}\""
+        attrs << "data-controller=\"#{html_name}\""
 
         (ctrl[:targets] || []).each do |t|
-          attrs << "data-#{name}-target=\"#{t}\""
+          attrs << "data-#{html_name}-target=\"#{t}\""
         end
 
         (ctrl[:values] || {}).each do |k, _v|
           # Convert camelCase to kebab-case for HTML attribute
           kebab = k.to_s.gsub(/([a-z])([A-Z])/, '\1-\2').downcase
-          attrs << "data-#{name}-#{kebab}-value=\"...\""
+          attrs << "data-#{html_name}-#{kebab}-value=\"...\""
         end
 
         (ctrl[:actions] || []).each do |a|
-          attrs << "data-action=\"click->#{name}##{a}\""
+          attrs << "data-action=\"click->#{html_name}##{a}\""
         end
 
         attrs

@@ -59,12 +59,23 @@ module RailsAiContext
 
         # Parse the partial's interface
         magic_locals = extract_magic_comment_locals(source)
-        referenced_locals = extract_local_variable_references(source)
         render_sites = find_render_sites(views_dir, partial, root)
-        method_calls = extract_method_calls_on_locals(source, referenced_locals)
+        method_calls = {}
 
-        # Combine all detected locals
-        all_locals = (magic_locals + referenced_locals).uniq.sort
+        # Primary: locals from render call sites (ground truth)
+        render_locals = render_sites.flat_map { |rs| rs[:locals] || [] }.uniq
+
+        # Secondary: local_assigns checks + defined? guards in partial source
+        source_locals = extract_local_variable_references(source)
+
+        # Combine: render-site locals first, then source-detected locals
+        # Filter out noise: single chars, capitalized words, known helpers
+        all_locals = (magic_locals + render_locals + source_locals).uniq
+          .reject { |l| l.length <= 1 || l.match?(/\A[A-Z]/) || l.match?(/\Arender_/) }
+          .sort
+
+        # Extract method calls only for confirmed locals
+        method_calls = extract_method_calls_on_locals(source, all_locals) if all_locals.any?
 
         case detail
         when "summary"
@@ -272,24 +283,18 @@ module RailsAiContext
           new_record? persisted? errors model_name
         ])
 
-        # Scan ERB tags for local variable usage — strict detection only
+        # High-confidence local detection only — avoids false positives from HTML/CSS text
         source.scan(/<%[=\-]?\s*(.+?)\s*-?%>/m).each do |match|
           code = match[0]
           next if code.start_with?("#")
 
-          # Only detect variables used as Ruby method receivers with proper method syntax:
-          # local.method_name, local&.method, local.method?, local.method!
-          # Require the method to contain underscore, end with ?/!, or have parens — filters English phrases
-          code.scan(/\b([a-z_]\w*)\s*&?\.\s*([a-z_]\w*[?!]?)/).each do |var, method|
-            next if known_non_locals.include?(var)
-            next if var.match?(/\A(do|end|in|or|and|not|if|then|else)\z/)
-            # Only accept if method looks like a real Ruby method (has underscore, ends with ?/!, has parens after)
-            is_real_method = method.include?("_") || method.end_with?("?") || method.end_with?("!") ||
-                             code.include?("#{var}.#{method}(") || %w[id name class type size count new to_s to_i].include?(method)
-            locals << var if is_real_method
+          # 1. Standalone ERB output: <%= local_name %> or <%= local_name.method %>
+          if (m = code.match(/\A\s*([a-z_]\w*)\s*(?:\z|\.|\()/))
+            name = m[1]
+            locals << name unless known_non_locals.include?(name)
           end
 
-          # Detect variables used with `defined?(local)` guard pattern
+          # 2. defined?(local) guard pattern
           code.scan(/defined\?\s*\(?([a-z_]\w*)\)?/).each do |var_match|
             locals << var_match[0]
           end
