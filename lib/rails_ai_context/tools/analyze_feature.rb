@@ -114,11 +114,17 @@ module RailsAiContext
               actions = info[:actions]&.join(", ") || "none"
               lines << "" << "### #{name}"
               lines << "- **Actions:** #{actions}"
+
+              # Inherited filters from parent controller
+              parent_filters = detect_parent_filters_for_analyze(info[:parent_class], controllers)
+              if parent_filters.any?
+                lines << "- **Inherited filters:** #{parent_filters.map { |f| "#{f[:name]} _(from #{info[:parent_class]})_" }.join(', ')}"
+              end
+
               filters = (info[:filters] || []).select { |f| f.is_a?(Hash) }.map do |f|
                 label = "#{f[:kind]} #{f[:name]}"
                 label += " only: #{Array(f[:only]).join(', ')}" if f[:only]&.any?
                 label += " except: #{Array(f[:except]).join(', ')}" if f[:except]&.any?
-                label += " unless: #{f[:unless]}" if f[:unless]
                 label
               end
               lines << "- **Filters:** #{filters.join('; ')}" if filters.any?
@@ -139,8 +145,14 @@ module RailsAiContext
             lines << "## Routes (#{route_count})"
             matched.sort.each do |ctrl, actions|
               actions.each do |r|
-                name_part = r[:name] ? " `#{r[:name]}`" : ""
-                lines << "- `#{r[:verb]}` `#{r[:path]}` → #{ctrl}##{r[:action]}#{name_part}"
+                params = r[:path].scan(/:(\w+)/).flatten
+                helper = if r[:name]
+                  args = params.any? ? "(#{params.map { |p| p == "id" ? "@record" : ":#{p}" }.join(', ')})" : ""
+                  " `#{r[:name]}_path#{args}`"
+                else
+                  ""
+                end
+                lines << "- `#{r[:verb]}` `#{r[:path]}` → #{ctrl}##{r[:action]}#{helper}"
               end
             end
           else
@@ -321,6 +333,18 @@ module RailsAiContext
             end
           end
 
+          # Check services
+          service_dir = File.join(root, "app", "services")
+          if Dir.exist?(service_dir)
+            Dir.glob(File.join(service_dir, "**", "*.rb")).each do |path|
+              next unless File.basename(path, ".rb").include?(pattern)
+              snake = File.basename(path, ".rb")
+              unless test_basenames.any? { |t| t.include?(snake) }
+                gaps << "Service `#{snake}` — no test file found"
+              end
+            end
+          end
+
           return if gaps.empty?
 
           lines << "## Test Coverage Gaps"
@@ -328,6 +352,28 @@ module RailsAiContext
           lines << ""
         rescue
           nil
+        end
+
+        # Detect inherited filters from parent controller
+        def detect_parent_filters_for_analyze(parent_class, all_controllers)
+          return [] unless parent_class
+          parent_data = all_controllers[parent_class]
+          if parent_data
+            return (parent_data[:filters] || []).select { |f| f.is_a?(Hash) && f[:kind] == "before" && !f[:only]&.any? }
+          end
+
+          # Fallback: read source file
+          path = Rails.root.join("app", "controllers", "#{parent_class.underscore}.rb")
+          return [] unless File.exist?(path)
+          source = File.read(path, encoding: "UTF-8") rescue nil
+          return [] unless source
+
+          source.each_line.filter_map do |line|
+            next if line.include?("only:") || line.include?("except:")
+            { name: $1 } if line.match(/\A\s*before_action\s+:(\w+)/)
+          end
+        rescue
+          []
         end
 
         # --- AF6: Related Models via Associations ---
