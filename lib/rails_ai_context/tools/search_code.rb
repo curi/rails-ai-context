@@ -40,12 +40,20 @@ module RailsAiContext
           },
           match_type: {
             type: "string",
-            enum: %w[any definition class],
-            description: "Filter match type. any: all matches (default). definition: only `def method_name` lines. class: only `class/module Name` lines."
+            enum: %w[any definition class call],
+            description: "Filter match type. any: all matches (default). definition: only `def method_name` lines. class: only `class/module Name` lines. call: only call sites (excludes the definition)."
           },
           exact_match: {
             type: "boolean",
             description: "Match whole words only (wraps pattern in \\b word boundaries). Default: false."
+          },
+          exclude_tests: {
+            type: "boolean",
+            description: "Exclude test/spec files from results. Default: false."
+          },
+          group_by_file: {
+            type: "boolean",
+            description: "Group results by file with match counts. Default: false."
           },
           max_results: {
             type: "integer",
@@ -61,8 +69,9 @@ module RailsAiContext
 
       annotations(read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false)
 
-      def self.call(pattern:, path: nil, file_type: nil, match_type: "any", exact_match: false, max_results: 30, context_lines: 2, server_context: nil)
+      def self.call(pattern:, path: nil, file_type: nil, match_type: "any", exact_match: false, exclude_tests: false, group_by_file: false, max_results: 30, context_lines: 2, server_context: nil) # rubocop:disable Metrics
         root = Rails.root.to_s
+        original_pattern = pattern
 
         # Reject empty or whitespace-only patterns
         if pattern.nil? || pattern.strip.empty?
@@ -72,20 +81,24 @@ module RailsAiContext
         # Apply exact_match word boundaries
         pattern = "\\b#{pattern}\\b" if exact_match
 
-        # Apply match_type filter to pattern (strip keyword if user already included it)
-        pattern = case match_type
+        # Apply match_type filter to pattern
+        search_pattern = case match_type
         when "definition"
           cleaned = pattern.sub(/\A\s*def\s+/, "")
           "^\\s*def\\s+(self\\.)?#{cleaned}"
         when "class"
           cleaned = pattern.sub(/\A\s*(class|module)\s+/, "")
-          "^\\s*(class|module)\\s+#{cleaned}"
-        else pattern
+          "^\\s*(class|module)\\s+\\w*#{cleaned}"
+        when "call"
+          # Search for the pattern but we'll filter out definitions after
+          pattern
+        else
+          pattern
         end
 
         # Validate regex syntax early
         begin
-          Regexp.new(pattern, timeout: 1)
+          Regexp.new(search_pattern, timeout: 1)
         rescue RegexpError => e
           return text_response("Invalid regex pattern: #{e.message}")
         end
@@ -118,28 +131,44 @@ module RailsAiContext
           return text_response("Path not found: #{path}")
         end
 
+        # Fetch extra results to get total count
+        fetch_limit = max_results + 1
         results = if ripgrep_available?
-                    search_with_ripgrep(pattern, search_path, file_type, max_results, root, context_lines)
+          search_with_ripgrep(search_pattern, search_path, file_type, fetch_limit, root, context_lines, exclude_tests: exclude_tests)
         else
-                    search_with_ruby(pattern, search_path, file_type, max_results, root)
+          search_with_ruby(search_pattern, search_path, file_type, fetch_limit, root, exclude_tests: exclude_tests)
+        end
+
+        # Filter out definitions for match_type:"call"
+        if match_type == "call"
+          results.reject! { |r| r[:content].match?(/\A\s*def\s/) }
         end
 
         if results.empty?
-          return text_response("No results found for '#{pattern}' in #{path || 'app'}.")
+          return text_response("No results found for '#{original_pattern}' in #{path || 'app'}.")
         end
 
-        output = results.map { |r| "#{r[:file]}:#{r[:line_number]}: #{r[:content].strip}" }.join("\n")
-        header = "# Search: `#{pattern}`\n**#{results.size} results**#{" in #{path}" if path}\n\n```\n"
-        footer = "\n```"
+        # Determine if there are more results
+        has_more = results.size > max_results
+        results = results.first(max_results)
 
-        text_response("#{header}#{output}#{footer}")
+        # Format output
+        total_hint = has_more ? " (showing #{max_results}, more available — increase max_results)" : ""
+        header = "# Search: `#{original_pattern}`\n**#{results.size} results**#{" in #{path}" if path}#{total_hint}\n\n"
+
+        if group_by_file
+          text_response(header + format_grouped(results))
+        else
+          output = results.map { |r| "#{r[:file]}:#{r[:line_number]}: #{r[:content].strip}" }.join("\n")
+          text_response("#{header}```\n#{output}\n```")
+        end
       end
 
       private_class_method def self.ripgrep_available?
         @rg_available ||= system("which rg > /dev/null 2>&1")
       end
 
-      private_class_method def self.search_with_ripgrep(pattern, search_path, file_type, max_results, root, ctx_lines = 0)
+      private_class_method def self.search_with_ripgrep(pattern, search_path, file_type, max_results, root, ctx_lines = 0, exclude_tests: false)
         cmd = [ "rg", "--no-heading", "--line-number", "--sort=path", "--max-count", max_results.to_s ]
         if ctx_lines > 0
           cmd.push("-C", ctx_lines.to_s)
@@ -158,8 +187,14 @@ module RailsAiContext
         end
 
         # Exclude non-code files that generate noise in search results
-        # (excluded_paths already handles node_modules, tmp, log, vendor, .git)
         NON_CODE_GLOBS.each { |glob| cmd << "--glob=!#{glob}" }
+
+        # Exclude test/spec directories if requested
+        if exclude_tests
+          cmd << "--glob=!test/"
+          cmd << "--glob=!spec/"
+          cmd << "--glob=!features/"
+        end
 
         if file_type
           cmd.push("--type-add", "custom:*.#{file_type}", "--type", "custom")
@@ -178,7 +213,7 @@ module RailsAiContext
         [ { file: "error", line_number: 0, content: e.message } ]
       end
 
-      private_class_method def self.search_with_ruby(pattern, search_path, file_type, max_results, root)
+      private_class_method def self.search_with_ruby(pattern, search_path, file_type, max_results, root, exclude_tests: false)
         results = []
         begin
           regex = Regexp.new(pattern, Regexp::IGNORECASE, timeout: 2)
@@ -189,11 +224,13 @@ module RailsAiContext
         glob = file_type ? "**/*.#{file_type}" : "**/*.{#{extensions}}"
         excluded = RailsAiContext.configuration.excluded_paths
         sensitive = RailsAiContext.configuration.sensitive_patterns
+        test_dirs = %w[test/ spec/ features/]
 
         Dir.glob(File.join(search_path, glob)).each do |file|
           relative = file.sub("#{root}/", "")
           next if excluded.any? { |ex| relative.start_with?(ex) }
           next if sensitive_file?(relative, sensitive)
+          next if exclude_tests && test_dirs.any? { |td| relative.start_with?(td) }
 
           File.readlines(file).each_with_index do |line, idx|
             if line.match?(regex)
@@ -214,6 +251,20 @@ module RailsAiContext
           File.fnmatch(pattern, relative_path, File::FNM_DOTMATCH) ||
             File.fnmatch(pattern, basename, File::FNM_DOTMATCH)
         end
+      end
+
+      # Group results by file for cleaner output
+      private_class_method def self.format_grouped(results)
+        grouped = results.group_by { |r| r[:file] }
+        lines = []
+        grouped.each do |file, matches|
+          lines << "## #{file} (#{matches.size} matches)"
+          lines << "```"
+          matches.each { |r| lines << "#{r[:line_number]}: #{r[:content].strip}" }
+          lines << "```"
+          lines << ""
+        end
+        lines.join("\n")
       end
 
       private_class_method def self.parse_rg_output(output, root)
