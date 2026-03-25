@@ -141,7 +141,6 @@ module RailsAiContext
 
         lines = [
           "---",
-          "description: \"ActiveRecord models reference\"",
           "globs:",
           "  - \"app/models/**/*.rb\"",
           "alwaysApply: false",
@@ -184,7 +183,6 @@ module RailsAiContext
 
         lines = [
           "---",
-          "description: \"Controller reference\"",
           "globs:",
           "  - \"app/controllers/**/*.rb\"",
           "alwaysApply: false",
@@ -215,7 +213,6 @@ module RailsAiContext
 
         lines = [
           "---",
-          "description: \"Design system and UI patterns for this Rails app\"",
           "globs:",
           "  - \"app/views/**/*.erb\"",
           "alwaysApply: false",
