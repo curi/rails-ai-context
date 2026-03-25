@@ -24,14 +24,78 @@ def apply_context_mode_override
   end
 end unless defined?(apply_context_mode_override)
 
+AI_TOOL_OPTIONS = {
+  "1" => { key: :claude,   name: "Claude Code" },
+  "2" => { key: :cursor,   name: "Cursor" },
+  "3" => { key: :copilot,  name: "GitHub Copilot" },
+  "4" => { key: :windsurf, name: "Windsurf" },
+  "5" => { key: :opencode, name: "OpenCode" }
+}.freeze unless defined?(AI_TOOL_OPTIONS)
+
+def prompt_ai_tools
+  puts ""
+  puts "Which AI tools do you use? (select all that apply)"
+  puts ""
+  AI_TOOL_OPTIONS.each { |num, info| puts "  #{num}. #{info[:name]}" }
+  puts "  a. All of the above"
+  puts ""
+  print "Enter numbers separated by commas (e.g. 1,2) or 'a' for all: "
+  input = $stdin.gets&.strip&.downcase || "a"
+
+  selected = if input == "a" || input == "all" || input.empty?
+    AI_TOOL_OPTIONS.values.map { |t| t[:key] }
+  else
+    input.split(/[\s,]+/).filter_map { |n| AI_TOOL_OPTIONS[n]&.dig(:key) }
+  end
+
+  if selected.empty?
+    puts "No tools selected — using all."
+    selected = AI_TOOL_OPTIONS.values.map { |t| t[:key] }
+  end
+
+  names = AI_TOOL_OPTIONS.values.select { |t| selected.include?(t[:key]) }.map { |t| t[:name] }
+  puts "Selected: #{names.join(', ')}"
+  selected
+end unless defined?(prompt_ai_tools)
+
+def save_ai_tools_to_initializer(tools)
+  init_path = Rails.root.join("config/initializers/rails_ai_context.rb")
+  return unless File.exist?(init_path)
+
+  content = File.read(init_path)
+  tools_line = "  config.ai_tools = %i[#{tools.join(' ')}]"
+
+  if content.include?("config.ai_tools")
+    # Replace existing ai_tools line
+    content.sub!(/^.*config\.ai_tools.*$/, tools_line)
+  elsif content.include?("RailsAiContext.configure")
+    # Insert after configure block opening
+    content.sub!(/RailsAiContext\.configure do \|config\|\n/, "RailsAiContext.configure do |config|\n#{tools_line}\n")
+  else
+    return
+  end
+
+  File.write(init_path, content)
+  puts "💾 Saved to config/initializers/rails_ai_context.rb"
+rescue
+  nil
+end unless defined?(save_ai_tools_to_initializer)
+
 namespace :ai do
-  desc "Generate AI context files for configured AI tools (or all if none configured)"
+  desc "Generate AI context files for configured AI tools (prompts on first run)"
   task context: :environment do
     require "rails_ai_context"
 
     apply_context_mode_override
 
     ai_tools = RailsAiContext.configuration.ai_tools
+
+    # First time — no tools configured, ask the user
+    if ai_tools.nil?
+      ai_tools = prompt_ai_tools
+      save_ai_tools_to_initializer(ai_tools) if ai_tools
+    end
+
     puts "🔍 Introspecting #{Rails.application.class.module_parent_name}..."
 
     if ai_tools.nil? || ai_tools.empty?
