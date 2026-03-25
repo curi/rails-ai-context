@@ -160,6 +160,14 @@ module RailsAiContext
             lines << cols
             lines << ""
           end
+
+          # Detect orphaned tables (no ActiveRecord model maps to them)
+          orphaned = paginated.select { |name| models_for_table(name).empty? }
+          if orphaned.any?
+            lines << "\u26A0 **Orphaned tables** (no ActiveRecord model): #{orphaned.join(', ')}"
+            lines << ""
+          end
+
           lines << "_Use `detail:\"summary\"` for all #{total} tables, `detail:\"full\"` for indexes/FKs, or `table:\"name\"` for one table._" if total > limit
           text_response(lines.join("\n"))
 

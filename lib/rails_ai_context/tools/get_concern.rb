@@ -18,13 +18,18 @@ module RailsAiContext
             type: "string",
             enum: %w[model controller all],
             description: "Filter by concern type. model: app/models/concerns/. controller: app/controllers/concerns/. all: both (default)."
+          },
+          detail: {
+            type: "string",
+            enum: %w[summary standard full],
+            description: "Detail level. summary: concern names only. standard: names + method signatures (default). full: method signatures with source code."
           }
         }
       )
 
       annotations(read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false)
 
-      def self.call(name: nil, type: "all", server_context: nil)
+      def self.call(name: nil, type: "all", detail: "standard", server_context: nil)
         root = rails_app.root.to_s
         max_size = RailsAiContext.configuration.max_file_size
 
@@ -36,7 +41,7 @@ module RailsAiContext
 
         # Specific concern — full detail
         if name
-          return show_concern(name, concern_dirs, root, max_size)
+          return show_concern(name, concern_dirs, root, max_size, detail)
         end
 
         # List all concerns
@@ -67,7 +72,7 @@ module RailsAiContext
         end
       end
 
-      private_class_method def self.show_concern(name, concern_dirs, root, max_size)
+      private_class_method def self.show_concern(name, concern_dirs, root, max_size, detail = "standard")
         # Find the concern file — try underscore variants and nested paths
         underscore = name.underscore
         file_path = nil
@@ -121,14 +126,47 @@ module RailsAiContext
         public_methods = parse_public_methods(source)
         if public_methods.any?
           lines << "" << "## Public Methods"
-          public_methods.each { |m| lines << "- `#{m}`" }
+          if detail == "full"
+            public_methods.each do |m|
+              method_name = m.to_s.split("(").first
+              method_source = extract_method_source(source, method_name)
+              if method_source
+                lines << "### #{m}"
+                lines << "```ruby"
+                lines << method_source
+                lines << "```"
+                lines << ""
+              else
+                lines << "- `#{m}`"
+              end
+            end
+          else
+            public_methods.each { |m| lines << "- `#{m}`" }
+          end
         end
 
         # Parse class methods (inside class_methods block or def self.)
         class_methods = parse_class_methods(source)
         if class_methods.any?
           lines << "" << "## Class Methods"
-          class_methods.each { |m| lines << "- `#{m}`" }
+          if detail == "full"
+            class_methods.each do |m|
+              method_name = m.to_s.split("(").first
+              # Try both `def method_name` and `def self.method_name`
+              method_source = extract_method_source(source, method_name) || extract_method_source(source, "self.#{method_name}")
+              if method_source
+                lines << "### #{m}"
+                lines << "```ruby"
+                lines << method_source
+                lines << "```"
+                lines << ""
+              else
+                lines << "- `#{m}`"
+              end
+            end
+          else
+            class_methods.each { |m| lines << "- `#{m}`" }
+          end
         end
 
         # Parse callbacks defined in the concern
@@ -343,6 +381,25 @@ module RailsAiContext
         callbacks
       rescue
         []
+      end
+
+      # Extract method source from raw source string using indentation-based matching
+      private_class_method def self.extract_method_source(source, method_name)
+        source_lines = source.lines
+        start_idx = source_lines.index { |l| l.match?(/\A\s*def\s+#{Regexp.escape(method_name.to_s)}\b/) }
+        return nil unless start_idx
+
+        def_indent = source_lines[start_idx][/\A\s*/].length
+        result = []
+
+        source_lines[start_idx..].each_with_index do |line, i|
+          result << line.rstrip
+          break if i > 0 && line.match?(/\A\s{#{def_indent}}end\b/)
+        end
+
+        result.join("\n")
+      rescue
+        nil
       end
 
       private_class_method def self.find_includers(concern_name, root, concern_type)
