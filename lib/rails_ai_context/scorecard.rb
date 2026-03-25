@@ -106,82 +106,61 @@ module RailsAiContext
     def compute_scores(ctx)
       scores = {}
 
-      # Context Coverage — how much of the app is introspectable
+      # What does AI know? — measures gem coverage, NOT app quality
+
+      # 1. Introspection — are all introspectors returning data?
       total_introspectors = RailsAiContext.configuration.introspectors.size
       working = ctx.count { |_k, v| v.is_a?(Hash) && !v[:error] }
-      scores["Context Coverage"] = {
+      scores["Introspection"] = {
         score: total_introspectors > 0 ? ((working.to_f / total_introspectors) * 100).round : 0,
         detail: "#{working}/#{total_introspectors} introspectors returning data"
       }
 
-      # Schema Intelligence — FK indexes + defaults coverage
+      # 2. Schema — does AI see tables and columns?
       tables = ctx.dig(:schema, :tables) || {}
-      fk_cols = 0; fk_indexed = 0
-      tables.each_value do |t|
-        (t[:columns] || []).each do |c|
-          next unless c[:name].end_with?("_id")
-          fk_cols += 1
-          indexed = (t[:indexes] || []).any? { |i| Array(i[:columns]).first == c[:name] }
-          fk_indexed += 1 if indexed
-        end
-      end
-      schema_score = fk_cols > 0 ? ((fk_indexed.to_f / fk_cols) * 100).round : 100
-      schema_detail = fk_cols > 0 ? "#{fk_indexed}/#{fk_cols} foreign keys indexed" : "no foreign keys to index"
-      @schema_tips = []
-      @schema_tips << "add indexes to FK columns" if fk_indexed < fk_cols
-      scores["Schema Intelligence"] = { score: schema_score, detail: "#{tables.size} tables, #{schema_detail}" }
+      total_cols = tables.values.sum { |t| t[:columns]&.size || 0 }
+      scores["Schema"] = {
+        score: tables.any? ? 100 : 0,
+        detail: "#{tables.size} tables, #{total_cols} columns detected"
+      }
 
-      # Model Depth — only checks associations + validations (every model should have these)
+      # 3. Models — does AI see associations, validations, scopes?
       models = ctx[:models] || {}
-      model_depth_total = 0
-      model_depth_filled = 0
-      models.each_value do |data|
-        next if data[:error]
-        # Every model should have at least associations OR validations
-        has_assoc = (data[:associations].is_a?(Array) && data[:associations].any?) ||
-                    (data[:associations].is_a?(Hash) && data[:associations].any?)
-        has_val = (data[:validations].is_a?(Array) && data[:validations].any?) ||
-                  (data[:validations].is_a?(Hash) && data[:validations].any?)
-        model_depth_total += 1
-        model_depth_filled += 1 if has_assoc || has_val
-      end
-      scores["Model Depth"] = {
-        score: model_depth_total > 0 ? ((model_depth_filled.to_f / model_depth_total) * 100).round : 0,
-        detail: "#{model_depth_filled}/#{models.size} models have associations or validations"
+      models_ok = models.count { |_, d| !d[:error] }
+      scores["Models"] = {
+        score: models.any? ? ((models_ok.to_f / models.size) * 100).round : 0,
+        detail: "#{models_ok}/#{models.size} models introspected"
       }
 
-      # Test Coverage Map
-      test_dir = File.join(app.root, "test")
-      spec_dir = File.join(app.root, "spec")
-      test_count = Dir.glob(File.join(test_dir, "**/*_test.rb")).size + Dir.glob(File.join(spec_dir, "**/*_spec.rb")).size
-      model_count = models.size
-      test_score = model_count > 0 ? [ ((test_count.to_f / (model_count * 2)) * 100).round, 100 ].min : 0
-      scores["Test Coverage Map"] = {
-        score: test_score,
-        detail: "#{test_count} test files across #{model_count} models"
+      # 4. Routes — does AI see route helpers and params?
+      routes = ctx[:routes]
+      route_count = routes&.dig(:total_routes) || 0
+      scores["Routes"] = {
+        score: route_count > 0 ? 100 : 0,
+        detail: "#{route_count} routes with helpers and params"
       }
 
-      # Validation Power — how many cross-layer checks are active
-      has_prism = begin; require "prism"; true; rescue LoadError; false; end
-      has_brakeman = begin; require "brakeman"; true; rescue LoadError; false; end
-      checks_available = 9 # base semantic checks
-      checks_available += 3 if has_prism # AST-based checks
-      checks_available += 1 if has_brakeman # security scan
-      max_checks = 13
-      scores["Validation Power"] = {
-        score: ((checks_available.to_f / max_checks) * 100).round,
-        detail: "#{checks_available}/#{max_checks} checks active" +
-                (has_prism ? "" : " (add Prism for AST checks)") +
-                (has_brakeman ? ", Brakeman: ✓" : " (add Brakeman for security)")
-      }
-
-      # MCP Tools
+      # 5. MCP Tools — how many tools available?
       tool_count = RailsAiContext::Server::TOOLS.size
       skip_count = RailsAiContext.configuration.skip_tools.size
       active = tool_count - skip_count
       scores["MCP Tools"] = {
         score: ((active.to_f / tool_count) * 100).round,
         detail: "#{active}/#{tool_count} tools active"
+      }
+
+      # 6. Validation — how many checks available?
+      has_prism = begin; require "prism"; true; rescue LoadError; false; end
+      has_brakeman = begin; require "brakeman"; true; rescue LoadError; false; end
+      checks_available = 9
+      checks_available += 3 if has_prism
+      checks_available += 1 if has_brakeman
+      max_checks = 13
+      scores["Validation"] = {
+        score: ((checks_available.to_f / max_checks) * 100).round,
+        detail: "#{checks_available}/#{max_checks} checks" +
+                (has_prism ? "" : " (add Prism for +3)") +
+                (has_brakeman ? ", Brakeman ✓" : " (add Brakeman for +1)")
       }
 
       scores
@@ -247,38 +226,26 @@ module RailsAiContext
       spots.first(8)
     end
 
-    def build_recommendations(scores, ctx)
+    def build_recommendations(scores, _ctx)
       recs = []
 
       scores.each do |category, data|
         next if data[:score] >= 100
 
         case category
-        when "Schema Intelligence"
-          # Find unindexed FK columns
-          tables = ctx.dig(:schema, :tables) || {}
-          tables.each do |table_name, t|
-            (t[:columns] || []).each do |c|
-              next unless c[:name].end_with?("_id")
-              indexed = (t[:indexes] || []).any? { |i| Array(i[:columns]).first == c[:name] }
-              recs << "Add index: `rails g migration AddIndexTo#{table_name.camelize} #{c[:name]}:index`" unless indexed
-            end
-          end
-        when "Model Depth"
-          models = ctx[:models] || {}
-          models.each do |name, d|
-            next if d[:error]
-            has_assoc = d[:associations].is_a?(Array) ? d[:associations].any? : d[:associations]&.any?
-            has_val = d[:validations].is_a?(Array) ? d[:validations].any? : d[:validations]&.any?
-            recs << "#{name}: add validations (every model should validate something)" unless has_assoc || has_val
-          end
-        when "Test Coverage Map"
-          recs << "Add more test files (target: 2x your model count)"
-        when "Validation Power"
-          recs << "Add `gem 'prism'` for AST-based semantic checks" unless data[:detail]&.include?("Prism") || data[:score] >= 100
-          recs << "Add `gem 'brakeman'` for security scanning" unless data[:detail]&.include?("Brakeman: ✓")
+        when "Introspection"
+          recs << "Use `config.preset = :full` to enable all introspectors"
+        when "Schema"
+          recs << "Run `rails db:schema:dump` to generate schema.rb"
+        when "Models"
+          recs << "Check for models that failed introspection (eager load issues)"
+        when "Routes"
+          recs << "Ensure config/routes.rb exists and is valid"
+        when "Validation"
+          recs << "Add `gem 'prism'` for 3 extra AST-based checks" unless data[:detail]&.include?("Prism") || data[:score] >= 100
+          recs << "Add `gem 'brakeman', group: :development` for security scanning" unless data[:detail]&.include?("Brakeman ✓")
         when "MCP Tools"
-          recs << "Remove entries from config.skip_tools to activate all 25 tools" if data[:score] < 100
+          recs << "Remove entries from config.skip_tools to activate all 25 tools"
         end
       end
 
