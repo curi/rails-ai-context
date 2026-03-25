@@ -95,6 +95,12 @@ module RailsAiContext
           end
         end
 
+        # Run Brakeman security scan on validated files (if installed and level:"rails")
+        if level == "rails"
+          brakeman_warnings = check_brakeman_security(files)
+          brakeman_warnings.each { |w| results << "  \u26A0 #{w}" }
+        end
+
         output = results.join("\n")
         output += "\n\n#{passed}/#{total} files passed"
         output += " _(Prism unavailable — using fallback parser, some semantic checks skipped)_" unless prism_available?
@@ -949,6 +955,48 @@ module RailsAiContext
         warnings.first(3) # cap at 3 to avoid noise
       rescue
         []
+      end
+
+      # ── Brakeman security scan (runs once for all files) ───────────
+
+      private_class_method def self.check_brakeman_security(files)
+        return [] unless brakeman_available?
+
+        tracker = Brakeman.run(
+          app_path: Rails.root.to_s,
+          quiet: true,
+          report_progress: false,
+          print_report: false
+        )
+
+        warnings = tracker.filtered_warnings
+        return [] if warnings.empty?
+
+        # Filter to only warnings in the validated files
+        normalized = files.map { |f| f.delete_prefix("/") }
+        relevant = warnings.select do |w|
+          path = w.file.relative
+          normalized.any? { |f| path == f || path.start_with?(f) }
+        end
+        return [] if relevant.empty?
+
+        relevant.sort_by(&:confidence).first(5).map do |w|
+          loc = w.line ? "#{w.file.relative}:#{w.line}" : w.file.relative
+          "[#{w.confidence_name}] #{w.warning_type} — #{loc}: #{w.message}"
+        end
+      rescue
+        []
+      end
+
+      private_class_method def self.brakeman_available?
+        return @brakeman_available unless @brakeman_available.nil?
+
+        @brakeman_available = begin
+          require "brakeman"
+          true
+        rescue LoadError
+          false
+        end
       end
     end
   end
