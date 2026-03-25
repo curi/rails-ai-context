@@ -76,6 +76,11 @@ module RailsAiContext
             lines << "" << "## Test Helpers"
             data[:test_helpers].each { |h| lines << "- `#{h}`" }
           end
+
+          # Generate a test template based on app patterns
+          template = generate_test_template(data)
+          lines.concat(template) if template.any?
+
           text_response(lines.join("\n"))
 
         when "full"
@@ -208,6 +213,89 @@ module RailsAiContext
         end
         hint = nearby.any? ? "\n\nFiles in test directory: #{nearby.join(', ')}" : ""
         "No test file found for #{name}. Searched: #{candidates.join(', ')}#{hint}"
+      end
+
+      # Generate a test template based on the app's actual test patterns
+      private_class_method def self.generate_test_template(data)
+        lines = []
+        framework = data[:framework]
+
+        if framework&.include?("RSpec") || framework&.include?("rspec")
+          lines << "" << "## Test Template (follow this pattern for new tests)"
+          lines << "```ruby"
+          lines << "require \"rails_helper\""
+          lines << ""
+          lines << "RSpec.describe ModelName, type: :model do"
+          lines << "  describe \"validations\" do"
+          lines << "    it { is_expected.to validate_presence_of(:field) }"
+          lines << "  end"
+          lines << ""
+          lines << "  describe \"#method_name\" do"
+          lines << "    it \"does something\" do"
+          lines << "      record = create(:model_name)"
+          lines << "      expect(record.method_name).to eq(expected)"
+          lines << "    end"
+          lines << "  end"
+          lines << "end"
+          lines << "```"
+        else
+          # Detect Devise + sign_in pattern from existing tests
+          has_devise = false
+          has_sign_in = false
+          test_dir = Rails.root.join("test")
+          if Dir.exist?(test_dir)
+            Dir.glob(File.join(test_dir, "**/*_test.rb")).first(5).each do |path|
+              content = File.read(path, encoding: "UTF-8") rescue next
+              has_devise = true if content.include?("Devise::Test")
+              has_sign_in = true if content.include?("sign_in")
+            end
+          end
+
+          lines << "" << "## Test Template (follow this pattern for new tests)"
+          lines << "```ruby"
+          lines << "require \"test_helper\""
+          lines << ""
+          lines << "class ModelNameTest < ActiveSupport::TestCase"
+          lines << "  test \"should be valid with required attributes\" do"
+          lines << "    record = model_names(:fixture_name)"
+          lines << "    assert record.valid?"
+          lines << "  end"
+          lines << ""
+          lines << "  test \"should require field\" do"
+          lines << "    record = ModelName.new"
+          lines << "    assert_not record.valid?"
+          lines << "    assert_includes record.errors[:field], \"can't be blank\""
+          lines << "  end"
+          lines << "end"
+          lines << "```"
+
+          if has_devise
+            lines << ""
+            lines << "```ruby"
+            lines << "# Controller test pattern"
+            lines << "require \"test_helper\""
+            lines << ""
+            lines << "class FeatureControllerTest < ActionDispatch::IntegrationTest"
+            lines << "  include Devise::Test::IntegrationHelpers" if has_devise
+            lines << ""
+            lines << "  test \"requires authentication\" do"
+            lines << "    get feature_path"
+            lines << "    assert_response :redirect"
+            lines << "  end"
+            lines << ""
+            lines << "  test \"shows page for signed in user\" do"
+            lines << "    sign_in users(:chef_one)" if has_sign_in
+            lines << "    get feature_path"
+            lines << "    assert_response :success"
+            lines << "  end"
+            lines << "end"
+            lines << "```"
+          end
+        end
+
+        lines
+      rescue
+        []
       end
 
       # Parse factory file to extract attributes and traits

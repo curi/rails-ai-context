@@ -96,12 +96,14 @@ module RailsAiContext
 
             lines << "## #{ctrl}/" unless controller && all_dirs.size == 1
             ctrl_templates.sort.each do |name, meta|
-              parts = meta[:partials]&.any? ? " renders: #{meta[:partials].join(', ')}" : ""
-              stim = meta[:stimulus]&.any? ? " stimulus: #{meta[:stimulus].join(', ')}" : ""
+              detail_parts = []
+              detail_parts << "renders: #{meta[:partials].join(', ')}" if meta[:partials]&.any?
+              detail_parts << "stimulus: #{meta[:stimulus].join(', ')}" if meta[:stimulus]&.any?
               extra = extract_view_metadata(name)
-              ivars = extra[:ivars]&.any? ? " ivars: #{extra[:ivars].join(', ')}" : ""
-              turbo = extra[:turbo]&.any? ? " turbo: #{extra[:turbo].join(', ')}" : ""
-              lines << "- #{name} (#{meta[:lines]} lines)#{parts}#{stim}#{ivars}#{turbo}"
+              detail_parts << "ivars: #{extra[:ivars].join(', ')}" if extra[:ivars]&.any?
+              detail_parts << "turbo: #{extra[:turbo].join(', ')}" if extra[:turbo]&.any?
+              details = detail_parts.any? ? " — #{detail_parts.join(' | ')}" : ""
+              lines << "- **#{name}** (#{meta[:lines]} lines)#{details}"
             end
             ctrl_partials.sort.each do |name, meta|
               fields = meta[:fields]&.any? ? " fields: #{meta[:fields].join(', ')}" : ""

@@ -144,7 +144,19 @@ module RailsAiContext
                 hint_str = hints.any? ? " [#{hints.join(', ')}]" : ""
                 "#{c[:name]}:#{c[:type]}#{hint_str}"
               end.join(", ")
-            lines << "### #{name}"
+            # Inline model info so AI doesn't need a separate get_model_details call
+            model_info = ""
+            if model_refs.any?
+              model_refs.each do |mname|
+                md = models_data[mname]
+                next unless md.is_a?(Hash) && !md[:error]
+                assoc_count = md[:associations]&.size || 0
+                val_count = md[:validations]&.size || 0
+                model_info = " → **#{mname}** (#{assoc_count} assoc, #{val_count} val)"
+                break
+              end
+            end
+            lines << "### #{name}#{model_info}"
             lines << cols
             lines << ""
           end

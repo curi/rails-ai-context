@@ -168,7 +168,19 @@ module RailsAiContext
                   ctrl_lines << "- `#{r[:verb]}` `#{r[:path]}` → #{r[:action]}#{helper_part}#{params_part}"
                 end
                 if ctrl_lines.any?
-                  lines << "## #{ctrl}"
+                  # Inline controller summary so AI doesn't need a separate get_controllers call
+                  ctrl_class = "#{ctrl.camelize}Controller"
+                  ctrl_data = cached_context.dig(:controllers, :controllers, ctrl_class)
+                  ctrl_summary = ""
+                  if ctrl_data
+                    filters = (ctrl_data[:filters] || []).map { |f| f[:name] }.first(3)
+                    formats = ctrl_data[:respond_to_formats]
+                    parts = []
+                    parts << "filters: #{filters.join(', ')}" if filters.any?
+                    parts << "formats: #{formats.join(', ')}" if formats&.any?
+                    ctrl_summary = " (#{parts.join(' | ')})" if parts.any?
+                  end
+                  lines << "## #{ctrl}#{ctrl_summary}"
                   lines.concat(ctrl_lines)
                   lines << ""
                 end
