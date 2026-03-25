@@ -21,8 +21,12 @@ module RailsAiContext
         scores: compute_scores(context),
         blind_spots: detect_blind_spots(context),
         token_comparison: estimate_tokens(context),
-        overall_score: 0 # computed after scores
-      }.tap { |r| r[:overall_score] = compute_overall(r[:scores]) }
+        recommendations: [],
+        overall_score: 0
+      }.tap do |r|
+        r[:overall_score] = compute_overall(r[:scores])
+        r[:recommendations] = build_recommendations(r[:scores], context)
+      end
     end
 
     def render(result)
@@ -72,6 +76,13 @@ module RailsAiContext
       lines << "  Token usage:  Without gem: ~#{tc[:without]} tokens  │  With gem: ~#{tc[:with]} tokens (#{tc[:savings]}% saved)"
       lines << ""
 
+      # Recommendations to reach 100
+      if result[:recommendations].any? && score < 100
+        lines << "  To reach 100%:"
+        result[:recommendations].each { |r| lines << "  → #{r}" }
+        lines << ""
+      end
+
       # Share line
       lines << "  Share: \"My Rails app scores #{score}/100 on AI readiness 🏆 #railsaicontext\""
       lines << ""
@@ -103,31 +114,40 @@ module RailsAiContext
         detail: "#{working}/#{total_introspectors} introspectors returning data"
       }
 
-      # Schema Intelligence — columns with hints
+      # Schema Intelligence — FK indexes + defaults coverage
       tables = ctx.dig(:schema, :tables) || {}
-      total_cols = tables.values.sum { |t| t[:columns]&.size || 0 }
-      indexed_cols = tables.values.sum { |t| (t[:indexes] || []).sum { |i| Array(i[:columns]).size } }
-      schema_score = total_cols > 0 ? [ ((indexed_cols.to_f / total_cols) * 200).round, 100 ].min : 0
-      scores["Schema Intelligence"] = {
-        score: schema_score,
-        detail: "#{tables.size} tables, #{indexed_cols} indexed columns of #{total_cols} total"
-      }
+      fk_cols = 0; fk_indexed = 0
+      tables.each_value do |t|
+        (t[:columns] || []).each do |c|
+          next unless c[:name].end_with?("_id")
+          fk_cols += 1
+          indexed = (t[:indexes] || []).any? { |i| Array(i[:columns]).first == c[:name] }
+          fk_indexed += 1 if indexed
+        end
+      end
+      schema_score = fk_cols > 0 ? ((fk_indexed.to_f / fk_cols) * 100).round : 100
+      schema_detail = fk_cols > 0 ? "#{fk_indexed}/#{fk_cols} foreign keys indexed" : "no foreign keys to index"
+      @schema_tips = []
+      @schema_tips << "add indexes to FK columns" if fk_indexed < fk_cols
+      scores["Schema Intelligence"] = { score: schema_score, detail: "#{tables.size} tables, #{schema_detail}" }
 
-      # Model Depth — associations, validations, scopes, enums, macros
+      # Model Depth — only checks associations + validations (every model should have these)
       models = ctx[:models] || {}
       model_depth_total = 0
       model_depth_filled = 0
       models.each_value do |data|
         next if data[:error]
-        %i[associations validations scopes enums callbacks].each do |key|
-          model_depth_total += 1
-          val = data[key]
-          model_depth_filled += 1 if val.is_a?(Array) ? val.any? : (val.is_a?(Hash) ? val.any? : val)
-        end
+        # Every model should have at least associations OR validations
+        has_assoc = (data[:associations].is_a?(Array) && data[:associations].any?) ||
+                    (data[:associations].is_a?(Hash) && data[:associations].any?)
+        has_val = (data[:validations].is_a?(Array) && data[:validations].any?) ||
+                  (data[:validations].is_a?(Hash) && data[:validations].any?)
+        model_depth_total += 1
+        model_depth_filled += 1 if has_assoc || has_val
       end
       scores["Model Depth"] = {
         score: model_depth_total > 0 ? ((model_depth_filled.to_f / model_depth_total) * 100).round : 0,
-        detail: "#{models.size} models with associations, validations, scopes, enums, callbacks"
+        detail: "#{model_depth_filled}/#{models.size} models have associations or validations"
       }
 
       # Test Coverage Map
@@ -225,6 +245,44 @@ module RailsAiContext
       end
 
       spots.first(8)
+    end
+
+    def build_recommendations(scores, ctx)
+      recs = []
+
+      scores.each do |category, data|
+        next if data[:score] >= 100
+
+        case category
+        when "Schema Intelligence"
+          # Find unindexed FK columns
+          tables = ctx.dig(:schema, :tables) || {}
+          tables.each do |table_name, t|
+            (t[:columns] || []).each do |c|
+              next unless c[:name].end_with?("_id")
+              indexed = (t[:indexes] || []).any? { |i| Array(i[:columns]).first == c[:name] }
+              recs << "Add index: `rails g migration AddIndexTo#{table_name.camelize} #{c[:name]}:index`" unless indexed
+            end
+          end
+        when "Model Depth"
+          models = ctx[:models] || {}
+          models.each do |name, d|
+            next if d[:error]
+            has_assoc = d[:associations].is_a?(Array) ? d[:associations].any? : d[:associations]&.any?
+            has_val = d[:validations].is_a?(Array) ? d[:validations].any? : d[:validations]&.any?
+            recs << "#{name}: add validations (every model should validate something)" unless has_assoc || has_val
+          end
+        when "Test Coverage Map"
+          recs << "Add more test files (target: 2x your model count)"
+        when "Validation Power"
+          recs << "Add `gem 'prism'` for AST-based semantic checks" unless data[:detail]&.include?("Prism") || data[:score] >= 100
+          recs << "Add `gem 'brakeman'` for security scanning" unless data[:detail]&.include?("Brakeman: ✓")
+        when "MCP Tools"
+          recs << "Remove entries from config.skip_tools to activate all 25 tools" if data[:score] < 100
+        end
+      end
+
+      recs.first(5)
     end
 
     def estimate_tokens(ctx)
