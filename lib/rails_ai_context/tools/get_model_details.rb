@@ -40,7 +40,8 @@ module RailsAiContext
         # Specific model — always full detail (strip whitespace for fuzzy input)
         if model
           model = model.strip
-          key = models.keys.find { |k| k.downcase == model.downcase } || model
+          model_under = model.underscore
+          key = models.keys.find { |k| k.downcase == model.downcase || k.underscore == model_under } || model
           data = models[key]
           unless data
             return not_found_response("Model", model, models.keys.sort,

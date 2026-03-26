@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-03-26
+
+### Fixed
+
+- **Consistent input normalization across all tools** — AI agents and humans can now use any casing or format and tools resolve correctly:
+  - `model=brand_profile` (snake_case) now resolves to `BrandProfile` via `.underscore` comparison in `get_model_details`.
+  - `table=Cook` (model name) now resolves to `cooks` table via `.underscore.pluralize` normalization in `get_schema`.
+  - `controller=CooksController` now works in `get_view` and `get_routes` — both strip `Controller`/`_controller` suffix consistently, matching `get_controllers` behavior.
+  - `controller=cooks_controller` no longer leaves a trailing underscore in route matching.
+  - `stimulus=CookStatus` (PascalCase) now resolves to `cook_status` via `.underscore` conversion in `get_stimulus`.
+  - `partial=_status_badge` (underscore-prefixed, no directory) now searches recursively across all view directories in `get_partial_interface`.
+  - `model=cooks` (plural) now tries `.singularize` for test file lookup in `get_test_info`.
+- **Smarter fuzzy matching** — `BaseTool.find_closest_match` now prefers shortest substring match (so `Cook` suggests `cooks`, not `cook_comments`) and supports underscore/classify variant matching.
+- **File path suggestions in validate** — `files=["cook.rb"]` now suggests `app/models/cook.rb` when the file isn't found at the given path.
+- **Empty parameter validation** — `edit_context` now returns friendly messages for empty `file` or `near` parameters instead of hard errors.
+
 ## [3.0.0] - 2026-03-26
 
 ### Removed

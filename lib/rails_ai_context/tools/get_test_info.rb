@@ -157,16 +157,27 @@ module RailsAiContext
       end
 
       private_class_method def self.find_test_file(name, type, detail = "full")
-        # Normalize: accept "Bonus::CrisesController", "bonus/crises", "Crises"
+        # Normalize: accept "Bonus::CrisesController", "bonus/crises", "Crises", "cooks" (plural)
         snake = name.to_s.tr("/", "::").underscore.sub(/_controller$/, "")
+        # For models, also try singular form (cooks → cook)
+        snake_singular = snake.singularize
         candidates = case type
         when :model
-          [
+          base = [
             "spec/models/#{snake}_spec.rb",
             "test/models/#{snake}_test.rb",
             "spec/models/concerns/#{snake}_spec.rb",
             "test/models/concerns/#{snake}_test.rb"
           ]
+          if snake != snake_singular
+            base += [
+              "spec/models/#{snake_singular}_spec.rb",
+              "test/models/#{snake_singular}_test.rb",
+              "spec/models/concerns/#{snake_singular}_spec.rb",
+              "test/models/concerns/#{snake_singular}_test.rb"
+            ]
+          end
+          base
         when :controller
           [
             "spec/controllers/#{snake}_controller_spec.rb",

@@ -165,16 +165,17 @@ RSpec.describe RailsAiContext::CLI::ToolRunner do
   end
 
   describe "validation" do
-    it "raises InvalidArgumentError for missing required params" do
+    it "returns friendly message for missing required params instead of raising" do
       runner = described_class.new("search_code", [])
-      expect { runner.run }
-        .to raise_error(described_class::InvalidArgumentError, /Missing required parameter/)
+      output = runner.run
+      expect(output).to include("Pattern is required")
     end
 
-    it "raises InvalidArgumentError for invalid enum value" do
+    it "strips invalid enum value and uses tool default instead of raising" do
       runner = described_class.new("schema", [ "--detail", "superdetailed" ])
-      expect { runner.run }
-        .to raise_error(described_class::InvalidArgumentError, /Invalid value.*Must be one of/)
+      output = runner.run
+      expect(output).to be_a(String)
+      expect(output).not_to be_empty
     end
   end
 

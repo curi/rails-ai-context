@@ -36,7 +36,11 @@ module RailsAiContext
       SENSITIVE_PATTERNS = nil # uses configuration.sensitive_patterns
 
       def self.call(file:, near:, context_lines: 5, server_context: nil)
-        # Reject empty search term
+        # Reject empty parameters
+        if file.nil? || file.strip.empty?
+          return text_response("The `file` parameter is required. Provide a path relative to Rails root (e.g. 'app/models/cook.rb').")
+        end
+
         if near.nil? || near.strip.empty?
           return text_response("The `near` parameter is required. Provide a method name, keyword, or string to find.")
         end

@@ -44,7 +44,12 @@ module RailsAiContext
         # (HTML uses data-controller="weekly-chart", file is weekly_chart_controller.js)
         if controller
           normalized = controller.downcase.tr("-", "_")
-          ctrl = all_controllers.find { |c| c[:name]&.downcase&.tr("-", "_") == normalized }
+          # Also handle PascalCase: CookStatus → cook_status
+          underscored = controller.underscore.downcase.tr("-", "_")
+          ctrl = all_controllers.find { |c|
+            name_norm = c[:name]&.downcase&.tr("-", "_")
+            name_norm == normalized || name_norm == underscored
+          }
           unless ctrl
             names = all_controllers.map { |c| c[:name] }.sort
             return not_found_response("Stimulus controller", controller, names,

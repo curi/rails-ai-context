@@ -51,9 +51,17 @@ module RailsAiContext
         end
 
         if controller
-          ctrl_lower = controller.downcase
-          filtered_templates = templates.select { |k, _| k.downcase.start_with?(ctrl_lower + "/") }
-          filtered_partials = partials.select { |k, _| k.downcase.start_with?(ctrl_lower + "/") }
+          # Normalize: accept "CooksController", "cooks", "cooks_controller", "Bonus::CooksController"
+          ctrl_lower = controller.underscore.delete_suffix("_controller")
+          ctrl_lower_alt = controller.downcase.delete_suffix("controller")
+          filtered_templates = templates.select { |k, _|
+            k_down = k.downcase
+            k_down.start_with?(ctrl_lower + "/") || k_down.start_with?(ctrl_lower_alt + "/")
+          }
+          filtered_partials = partials.select { |k, _|
+            k_down = k.downcase
+            k_down.start_with?(ctrl_lower + "/") || k_down.start_with?(ctrl_lower_alt + "/")
+          }
 
           if filtered_templates.empty? && filtered_partials.empty?
             all_dirs = (templates.keys + partials.keys).map { |k| k.split("/").first }.uniq.sort
@@ -303,7 +311,12 @@ module RailsAiContext
           .sort
 
         if controller
-          templates = templates.select { |t| t.downcase.start_with?(controller.downcase + "/") }
+          ctrl_lower = controller.underscore.delete_suffix("_controller")
+          ctrl_lower_alt = controller.downcase.delete_suffix("controller")
+          templates = templates.select { |t|
+            t_down = t.downcase
+            t_down.start_with?(ctrl_lower + "/") || t_down.start_with?(ctrl_lower_alt + "/")
+          }
         end
 
         lines = [ "# Views (#{templates.size} templates)", "" ]

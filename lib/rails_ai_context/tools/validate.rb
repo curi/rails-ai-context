@@ -37,7 +37,7 @@ module RailsAiContext
       # ── Main entry point ─────────────────────────────────────────────
 
       def self.call(files:, level: "syntax", server_context: nil)
-        return text_response("No files provided.") if files.empty?
+        return text_response("No files provided. Pass file paths relative to Rails root (e.g. files:[\"app/models/cook.rb\"]).") if files.nil? || files.empty?
         return text_response("Too many files (#{files.size}). Maximum is #{max_files} per call.") if files.size > max_files
 
         results = []
@@ -48,7 +48,9 @@ module RailsAiContext
           full_path = Rails.root.join(file)
 
           unless File.exist?(full_path)
-            results << "\u2717 #{file} \u2014 file not found"
+            suggestion = find_file_suggestion(file)
+            hint = suggestion ? " Did you mean '#{suggestion}'?" : ""
+            results << "\u2717 #{file} \u2014 file not found.#{hint}"
             total += 1
             next
           end
@@ -121,6 +123,24 @@ module RailsAiContext
       end
 
       # ── Ruby validation ──────────────────────────────────────────────
+
+      # Search common Rails directories for a file by basename and suggest the full path
+      private_class_method def self.find_file_suggestion(file)
+        basename = File.basename(file)
+        %w[app/models app/controllers app/views app/helpers app/jobs app/mailers
+           app/services app/channels lib config].each do |dir|
+          candidate = File.join(dir, basename)
+          return candidate if File.exist?(Rails.root.join(candidate))
+        end
+
+        # Broader recursive search
+        matches = Dir.glob(File.join(Rails.root, "app", "**", basename)).first(1)
+        return matches.first.sub("#{Rails.root}/", "") if matches.any?
+
+        nil
+      rescue
+        nil
+      end
 
       private_class_method def self.validate_ruby(full_path)
         prism_available? ? validate_ruby_prism(full_path) : validate_ruby_subprocess(full_path)

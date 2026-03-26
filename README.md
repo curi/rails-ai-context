@@ -9,7 +9,7 @@
 
 **Works with:** Claude Code &bull; Cursor &bull; GitHub Copilot &bull; OpenCode &bull; Any terminal
 
-> Built by a Rails developer with 10+ years of production experience. AI assisted — the same way it assists me shipping features at work. I designed the architecture, made every decision, reviewed every line, and wrote 653 tests. This gem exists because I understand Rails deeply enough to know exactly what AI agents get wrong and what context they need to get it right.
+> Built by a Rails developer with 10+ years of production experience. AI assisted — the same way it assists me shipping features at work. I designed the architecture, made every decision, reviewed every line, and wrote 681 tests. This gem exists because I understand Rails deeply enough to know exactly what AI agents get wrong and what context they need to get it right.
 
 ```bash
 gem "rails-ai-context", group: :development
@@ -340,7 +340,7 @@ end
 ```bash
 git clone https://github.com/crisnahine/rails-ai-context.git
 cd rails-ai-context && bundle install
-bundle exec rspec       # 653 examples
+bundle exec rspec       # 681 examples
 bundle exec rubocop     # Lint
 ```
 

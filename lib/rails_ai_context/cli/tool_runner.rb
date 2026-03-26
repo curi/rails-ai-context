@@ -219,27 +219,37 @@ module RailsAiContext
       end
 
       # Validate kwargs against the tool's input_schema.
+      # For missing required params: strip empty values so the tool's own guards
+      # can return a friendly response (matching MCP behavior).
+      # For invalid enums: strip the bad value and let the tool use its default.
       def validate_kwargs!(kwargs, schema)
         properties = schema[:properties] || {}
         required = (schema[:required] || []).map(&:to_s)
 
-        # Check required params
+        # For required params with empty-string values, keep the key but set to nil
+        # so the tool's own guards can return friendly "parameter is required" messages
+        # (matching MCP behavior). We keep the key to avoid Ruby ArgumentError on
+        # required keyword arguments.
         required.each do |param|
-          unless kwargs.key?(param.to_sym) && !kwargs[param.to_sym].nil? && kwargs[param.to_sym].to_s != ""
-            raise InvalidArgumentError,
-              "Missing required parameter '#{param}' for #{tool_class.tool_name}.\n" \
-              "Run: rails-ai-context tool #{self.class.short_name(tool_class.tool_name)} --help"
+          if kwargs.key?(param.to_sym) && kwargs[param.to_sym].to_s.strip == ""
+            kwargs[param.to_sym] = nil
+          elsif !kwargs.key?(param.to_sym)
+            kwargs[param.to_sym] = nil
           end
         end
 
-        # Check enum constraints
+        # Check enum constraints — downcase before comparing for case-insensitive match.
+        # If invalid, strip the param so the tool uses its default behavior.
         kwargs.each do |key, value|
           prop = properties[key]
           next unless prop&.dig(:enum)
-          unless prop[:enum].include?(value.to_s)
-            raise InvalidArgumentError,
-              "Invalid value '#{value}' for --#{key.to_s.tr('_', '-')}. " \
-              "Must be one of: #{prop[:enum].join(', ')}"
+
+          # Try case-insensitive match first
+          matched = prop[:enum].find { |e| e.to_s.downcase == value.to_s.downcase }
+          if matched
+            kwargs[key] = matched
+          else
+            kwargs.delete(key)
           end
         end
       end

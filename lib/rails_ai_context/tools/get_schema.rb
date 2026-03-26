@@ -56,9 +56,14 @@ module RailsAiContext
         offset = [ offset.to_i, 0 ].max
         limit = [ limit.to_i, 0 ].max if limit && limit.to_i < 0
 
-        # Single table — case-insensitive lookup
+        # Single table — case-insensitive lookup with model name normalization
+        # Accepts: "users", "Users", "User" (model name → pluralized+underscored table)
         if table
-          table_key = tables.keys.find { |k| k.downcase == table.downcase } || table
+          table_down = table.downcase
+          table_as_table = table.underscore.pluralize # Cook → cooks, BrandProfile → brand_profiles
+          table_key = tables.keys.find { |k|
+            k.downcase == table_down || k == table_as_table || k == table.underscore
+          } || table
           table_data = tables[table_key]
           unless table_data
             return not_found_response("Table", table, tables.keys.sort,

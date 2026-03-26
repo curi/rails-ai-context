@@ -201,6 +201,7 @@ module RailsAiContext
 
       # Resolve a partial reference to an actual file path on disk.
       # Handles both underscore-prefixed filenames and non-prefixed input.
+      # Falls back to recursive search when no directory is specified.
       private_class_method def self.resolve_partial_path(views_dir, partial)
         # Normalize: strip leading underscore from basename if provided
         parts = partial.split("/")
@@ -211,10 +212,11 @@ module RailsAiContext
         prefixed_basename = basename.start_with?("_") ? basename : "_#{basename}"
         unprefixed_basename = basename.delete_prefix("_")
 
+        extensions = %w[.html.erb .erb .html.haml .haml .html.slim .slim]
         candidates = []
 
         # Try prefixed name with various extensions
-        %w[.html.erb .erb .html.haml .haml .html.slim .slim].each do |ext|
+        extensions.each do |ext|
           candidates << File.join(views_dir, *dir_parts, "#{prefixed_basename}#{ext}")
           candidates << File.join(views_dir, *dir_parts, "#{unprefixed_basename}#{ext}")
         end
@@ -223,6 +225,19 @@ module RailsAiContext
         candidates << File.join(views_dir, partial)
 
         found = candidates.find { |c| File.exist?(c) }
+
+        # Fallback: if no directory was specified and direct lookup failed,
+        # search recursively for the partial across all view directories
+        if found.nil? && dir_parts.empty?
+          extensions.each do |ext|
+            matches = Dir.glob(File.join(views_dir, "**", "#{prefixed_basename}#{ext}"))
+            if matches.any?
+              found = matches.first
+              break
+            end
+          end
+        end
+
         return nil unless found
 
         # Path traversal protection

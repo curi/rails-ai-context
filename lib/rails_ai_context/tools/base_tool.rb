@@ -65,13 +65,24 @@ module RailsAiContext
           text_response(lines.join("\n"))
         end
 
-        # Simple fuzzy match: find the closest available name by substring or edit distance
+        # Fuzzy match: find the closest available name by exact, underscore, substring, or prefix
         def find_closest_match(input, available)
           return nil if available.empty?
           downcased = input.downcase
-          # Exact substring match first
-          exact = available.find { |a| a.downcase.include?(downcased) || downcased.include?(a.downcase) }
+          underscored = input.underscore.downcase
+
+          # Exact case-insensitive match (including underscore/classify variants)
+          exact = available.find do |a|
+            a_down = a.downcase
+            a_under = a.underscore.downcase
+            a_down == downcased || a_under == underscored || a_down == underscored || a_under == downcased
+          end
           return exact if exact
+
+          # Substring match — prefer shortest (most specific) to avoid cook → cook_comments
+          substring_matches = available.select { |a| a.downcase.include?(downcased) || downcased.include?(a.downcase) }
+          return substring_matches.min_by(&:length) if substring_matches.any?
+
           # Prefix match
           available.find { |a| a.downcase.start_with?(downcased[0..2]) }
         end
