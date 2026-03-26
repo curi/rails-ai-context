@@ -13,17 +13,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **CLI tool support** — all 25 MCP tools can now be run from the terminal. Rake: `rails 'ai:tool[schema]' table=users detail=full`. Thor CLI: `rails-ai-context tool schema --table users --detail full`. `rails ai:tool` (no args) lists all tools. `--help` shows per-tool help auto-generated from input_schema. `--json` / `JSON=1` for JSON envelope output. Tool name resolution: `schema` → `get_schema` → `rails_get_schema`.
-- **`tool_mode` config** — new `config.tool_mode` option: `:mcp` (default, MCP primary + CLI fallback) or `:cli` (CLI only, no MCP server needed). Selected during `rails generate rails_ai_context:install`.
-- **ToolGuideHelper** — shared serializer module for tool reference sections, rendering MCP or CLI syntax based on `tool_mode`. All 5 serializers updated to use it.
-- **ToolRunner** — `lib/rails_ai_context/cli/tool_runner.rb` handles CLI tool execution with argument parsing, tool name resolution, help generation, and JSON output formatting.
+- **CLI tool support** — all 25 MCP tools can now be run from the terminal: `rails 'ai:tool[schema]' table=users detail=full`. Also via Thor CLI: `rails-ai-context tool schema --table users`. `rails ai:tool` lists all tools. `--help` shows per-tool help auto-generated from input_schema. `--json` / `JSON=1` for JSON envelope. Tool name resolution: `schema` → `get_schema` → `rails_get_schema`.
+- **`tool_mode` config** — `:mcp` (default, MCP primary + CLI fallback) or `:cli` (CLI only, no MCP server needed). Selected during install and first `rails ai:context` run.
+- **ToolRunner** — `lib/rails_ai_context/cli/tool_runner.rb` handles CLI tool execution: arg parsing, type coercion from input_schema, required param validation, enum checking, fuzzy tool name suggestions on typos.
+- **ToolGuideHelper** — shared serializer module renders tool reference sections with MCP or CLI syntax based on `tool_mode`, with MANDATORY enforcement + CLI escape hatch. 3-column tool table (MCP | CLI | description).
+- **Copilot `excludeAgent`** — MCP tools instruction file uses `excludeAgent: "code-review"` (code review can't invoke MCP tools, saves 4K char budget).
+- **`.mcp.json` auto-create** — `rails ai:context` automatically creates `.mcp.json` when `tool_mode` is `:mcp` and the file doesn't exist. Existing apps upgrading to v3.0.0 get it without re-running the install generator.
+- **Full config initializer** — generated initializer documents every configuration option organized by section (AI Tools, Introspection, Models & Filtering, MCP Server, File Size Limits, Extensibility, Security, Search).
+- **Cursor MDC compliance spec** — 26 tests validating MDC format: frontmatter fields, rule types, glob syntax, line limits.
+- **Copilot compliance spec** — 25 tests validating instruction format: applyTo, excludeAgent, file naming, content quality.
 
 ### Changed
 
 - Serializer count reduced from 6 to 5 (Claude, Cursor, Copilot, OpenCode, JSON).
-- Install generator AI tool selection renumbered (4 options instead of 5).
-- Install generator now includes MCP opt-in step for `tool_mode` selection.
-- All documentation, rake tasks, CLI, and configuration updated to reflect Windsurf removal.
+- Install generator renumbered (4 AI tool options instead of 5) + MCP opt-in step.
+- Cursor glob-based rules no longer combine `globs` + `description` (pure Type 2 auto-attach per Cursor best practices).
+- MCP tool instructions use MANDATORY enforcement with CLI escape hatch — AI agents use tools when available, fall back to CLI or file reading when not.
+- All CLI examples use zsh-safe quoting: `rails 'ai:tool[X]'` (brackets are glob patterns in zsh).
+- README rewritten with real-world workflow examples, categorized tool table, MCP vs CLI showcase.
 
 ## [2.0.5] - 2026-03-25
 

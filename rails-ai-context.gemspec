@@ -35,9 +35,9 @@ Gem::Specification.new do |spec|
   spec.post_install_message = <<~MSG
     rails-ai-context installed! Quick start:
       rails generate rails_ai_context:install
-      rails ai:context         # generate context files (compact mode)
-      rails ai:context:full    # full dump (good for small apps)
-      rails ai:serve           # start MCP server for Claude Code / Cursor
+      rails ai:context              # generate context files
+      rails 'ai:tool[schema]'      # run any of the 25 tools from CLI
+      rails ai:serve                # start MCP server (optional)
   MSG
 
   spec.files = Dir.chdir(__dir__) do
