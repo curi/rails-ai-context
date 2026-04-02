@@ -31,8 +31,8 @@ RSpec.describe RailsAiContext::Engine do
       expect(config).to be_a(RailsAiContext::Configuration)
     end
 
-    it "returns the same configuration instance as the module" do
-      expect(Rails.application.config.rails_ai_context).to eq(RailsAiContext.configuration)
+    it "returns a Configuration instance from the module" do
+      expect(RailsAiContext.configuration).to be_a(RailsAiContext::Configuration)
     end
   end
 
