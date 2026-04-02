@@ -4,7 +4,6 @@
 
 **Your AI is guessing your Rails app. Every guess costs you time.**
 
-<br>
 
 <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Claude_Code-ee8b4a?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Code"></a>
 <a href="https://cursor.com"><img src="https://img.shields.io/badge/Cursor-000000?style=for-the-badge&logo=cursor&logoColor=white" alt="Cursor"></a>
@@ -12,7 +11,7 @@
 <a href="https://opencode.ai"><img src="https://img.shields.io/badge/OpenCode-4285F4?style=for-the-badge&logoColor=white" alt="OpenCode"></a>
 <a href="#-cli--works-everywhere"><img src="https://img.shields.io/badge/Any_Terminal-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white" alt="Any Terminal"></a>
 
-<br><br>
+
 
 [![Gem Version](https://img.shields.io/gem/v/rails-ai-context?color=brightgreen)](https://rubygems.org/gems/rails-ai-context)
 [![Downloads](https://img.shields.io/gem/dt/rails-ai-context?color=blue)](https://rubygems.org/gems/rails-ai-context)
@@ -25,7 +24,7 @@
 
 </div>
 
-<br>
+
 
 ## The problem
 
