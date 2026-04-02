@@ -108,7 +108,8 @@ module RailsAiContext
         private
 
         def migration_class_name(action, table, column = nil)
-          parts = [ action.camelize, column&.camelize, "To", table.camelize ].compact
+          preposition = action == "remove" ? "From" : "To"
+          parts = [ action.camelize, column&.camelize, preposition, table.camelize ].compact
           parts.join
         end
 
@@ -286,6 +287,9 @@ module RailsAiContext
 
           opts = options ? ", #{options}" : ""
 
+          # Detect original column type from schema for a reversible down method
+          original_type = find_column_type(table, column, cached_context[:schema]) || "string"
+
           lines << "**Warning:** Changing column type may cause data loss if types are incompatible."
           lines << ""
           lines << "```ruby"
@@ -295,8 +299,7 @@ module RailsAiContext
           lines << "  end"
           lines << ""
           lines << "  def down"
-          lines << "    # Specify the original type here"
-          lines << "    change_column :#{table}, :#{column}, :original_type"
+          lines << "    change_column :#{table}, :#{column}, :#{original_type}"
           lines << "  end"
           lines << "end"
           lines << "```"

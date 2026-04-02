@@ -65,12 +65,20 @@ module RailsAiContext
         def session_record(tool_name, params, summary = nil)
           SESSION_CONTEXT[:mutex].synchronize do
             key = session_key(tool_name, params)
-            SESSION_CONTEXT[:queries][key] = {
-              tool: tool_name.to_s,
-              params: params,
-              timestamp: Time.now.iso8601,
-              summary: summary
-            }
+            existing = SESSION_CONTEXT[:queries][key]
+            if existing
+              existing[:call_count] = (existing[:call_count] || 1) + 1
+              existing[:last_timestamp] = Time.now.iso8601
+              existing[:summary] = summary if summary
+            else
+              SESSION_CONTEXT[:queries][key] = {
+                tool: tool_name.to_s,
+                params: params,
+                call_count: 1,
+                timestamp: Time.now.iso8601,
+                summary: summary
+              }
+            end
           end
         end
 
@@ -155,13 +163,20 @@ module RailsAiContext
           end
         end
 
+        # Store call params for the current tool invocation (thread-safe)
+        def set_call_params(**params)
+          Thread.current[:rails_ai_context_call_params] = params.reject { |_, v| v.nil? || (v.respond_to?(:empty?) && v.empty?) }
+        end
+
         # Helper: wrap text in an MCP::Tool::Response with safety-net truncation.
         # Auto-records the call in session context so session_context(action:"status") works.
         def text_response(text)
           # Auto-track: record this tool call in session context (skip SessionContext itself to avoid recursion)
           if respond_to?(:tool_name) && tool_name != "rails_session_context"
             summary = text.lines.first&.strip&.truncate(80)
-            session_record(tool_name, {}, summary)
+            params = Thread.current[:rails_ai_context_call_params] || {}
+            session_record(tool_name, params, summary)
+            Thread.current[:rails_ai_context_call_params] = nil
           end
 
           max = RailsAiContext.configuration.max_tool_response_chars

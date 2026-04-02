@@ -72,10 +72,12 @@ module RailsAiContext
           lines << "|------|--------|------|"
 
           queries.sort_by { |q| q[:timestamp] }.each do |q|
-            ago = time_ago(q[:timestamp])
+            ago = time_ago(q[:last_timestamp] || q[:timestamp])
             params_str = q[:params].is_a?(Hash) ? q[:params].map { |k, v| "#{k}:#{v}" }.join(", ") : q[:params].to_s
             params_display = params_str.empty? ? "-" : params_str.truncate(40)
-            lines << "| `#{q[:tool]}` | #{params_display} | #{ago} |"
+            count = q[:call_count] || 1
+            count_display = count > 1 ? " (#{count}x)" : ""
+            lines << "| `#{q[:tool]}`#{count_display} | #{params_display} | #{ago} |"
           end
 
           lines << ""
@@ -90,22 +92,25 @@ module RailsAiContext
             return text_response("No queries recorded yet.")
           end
 
+          total_calls = queries.sum { |q| q[:call_count] || 1 }
+          unique_tools = queries.map { |q| q[:tool] }.uniq.size
           lines = [ "# Session Summary", "" ]
-          lines << "You have queried #{queries.size} tool(s) in this session:"
+          lines << "You have made #{total_calls} tool call(s) across #{unique_tools} unique tool(s) in this session:"
           lines << ""
 
-          # Group by tool name
+          # Group by tool name, summing actual call counts
           by_tool = queries.group_by { |q| q[:tool] }
-          by_tool.each do |tool, calls|
-            params_list = calls.map { |c|
+          by_tool.each do |tool, entries|
+            total_calls = entries.sum { |e| e[:call_count] || 1 }
+            params_list = entries.map { |c|
               p = c[:params]
               p.is_a?(Hash) ? p.map { |k, v| "#{k}:#{v}" }.join(", ") : p.to_s
             }.reject(&:empty?)
 
             if params_list.any?
-              lines << "- **#{tool}** (#{calls.size}x): #{params_list.uniq.join('; ')}"
+              lines << "- **#{tool}** (#{total_calls}x): #{params_list.uniq.join('; ')}"
             else
-              lines << "- **#{tool}** (#{calls.size}x)"
+              lines << "- **#{tool}** (#{total_calls}x)"
             end
           end
 

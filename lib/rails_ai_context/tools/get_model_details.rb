@@ -33,6 +33,7 @@ module RailsAiContext
       annotations(read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false)
 
       def self.call(model: nil, detail: "standard", limit: nil, offset: 0, server_context: nil)
+        set_call_params(model: model, detail: detail)
         models = cached_context[:models]
         return text_response("Model introspection not available. Add :models to introspectors.") unless models
         return text_response("Model introspection failed: #{models[:error]}") if models[:error]

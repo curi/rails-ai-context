@@ -183,22 +183,60 @@ module RailsAiContext
 
         def section_auth(ctx)
           auth = ctx[:auth]
-          return [] unless auth.is_a?(Hash) && !auth[:error]
-
-          authentication = auth[:authentication] || {}
-          authorization = auth[:authorization] || {}
-          return [] if authentication.empty? && authorization.empty?
-
           lines = [ "## Authentication & Authorization", "" ]
-          if authentication[:method]
-            lines << "Authentication is handled by #{authentication[:method]}."
+          has_content = false
+
+          if auth.is_a?(Hash) && !auth[:error]
+            authentication = auth[:authentication] || {}
+            authorization = auth[:authorization] || {}
+            if authentication[:method]
+              lines << "Authentication is handled by #{authentication[:method]}."
+              has_content = true
+            end
+            if authentication[:model]
+              lines << "The #{authentication[:model]} model handles user accounts."
+              has_content = true
+            end
+            if authorization[:method]
+              lines << "Authorization uses #{authorization[:method]}."
+              has_content = true
+            end
           end
-          if authentication[:model]
-            lines << "The #{authentication[:model]} model handles user accounts."
+
+          # Fallback: detect auth from gems if introspector didn't provide data
+          unless has_content
+            gems = ctx[:gems]
+            if gems.is_a?(Hash) && !gems[:error]
+              notable = gems[:notable_gems] || []
+              auth_gem_names = %w[devise omniauth rodauth sorcery clearance authlogic]
+              auth_gems = notable.select { |g| g.is_a?(Hash) && auth_gem_names.include?(g[:name].to_s) }
+              if auth_gems.any?
+                lines << "Authentication via #{auth_gems.map { |g| "#{g[:name]}#{g[:version] ? " (#{g[:version]})" : ""}" }.join(', ')}."
+                has_content = true
+              end
+              authz_gem_names = %w[pundit cancancan action_policy rolify]
+              authz_gems = notable.select { |g| g.is_a?(Hash) && authz_gem_names.include?(g[:name].to_s) }
+              if authz_gems.any?
+                lines << "Authorization via #{authz_gems.map { |g| g[:name] }.join(', ')}."
+                has_content = true
+              end
+            end
           end
-          if authorization[:method]
-            lines << "Authorization uses #{authorization[:method]}."
+
+          # Fallback: detect from conventions (global before_actions like authenticate_user!)
+          unless has_content
+            conv = ctx[:conventions]
+            if conv.is_a?(Hash) && !conv[:error]
+              before_acts = Array(conv[:before_actions]).select { |a| a.to_s.match?(/authenticat|authorize/) }
+              auth_checks = Array(conv[:authorization_checks]) + before_acts
+              if auth_checks.any?
+                lines << "Auth checks detected: #{auth_checks.first(5).join(', ')}."
+                has_content = true
+              end
+            end
           end
+
+          return [] unless has_content
           lines << ""
           lines
         end
@@ -356,16 +394,42 @@ module RailsAiContext
           turbo = ctx[:turbo]
           jobs = ctx[:jobs]
           channels = (jobs.is_a?(Hash) ? jobs[:channels] : nil) || []
-          return [] unless (turbo.is_a?(Hash) && !turbo[:error]) || channels.any?
+          has_content = false
 
           lines = [ "## Real-Time Features", "" ]
           if channels.any?
             names = channels.map { |c| c[:name] || c[:class_name] }.compact
             lines << "Action Cable channels: #{names.join(', ')}."
+            has_content = true
           end
-          if turbo.is_a?(Hash) && !turbo[:error] && turbo[:broadcasts]&.any?
-            lines << "Turbo Stream broadcasts: #{turbo[:broadcasts].size} broadcast points."
+
+          if turbo.is_a?(Hash) && !turbo[:error]
+            broadcasts = turbo[:broadcasts] || turbo[:explicit_broadcasts] || []
+            if broadcasts.any?
+              lines << "Turbo Stream broadcasts: #{broadcasts.size} broadcast points."
+              has_content = true
+            end
+            streams = turbo[:stream_subscriptions] || turbo[:subscriptions] || []
+            if streams.any?
+              lines << "Turbo Stream subscriptions: #{streams.size}."
+              has_content = true
+            end
           end
+
+          # Fallback: check for turbo_stream usage in views
+          unless has_content
+            views = ctx[:view_templates] || ctx[:views]
+            if views.is_a?(Hash) && !views[:error]
+              templates = Array(views[:templates])
+              turbo_views = templates.select { |v| v.is_a?(Hash) && (v[:path].to_s.include?("turbo_stream") || Array(v[:turbo_streams]).any?) }
+              if turbo_views.any?
+                lines << "Turbo Stream templates: #{turbo_views.size}."
+                has_content = true
+              end
+            end
+          end
+
+          return [] unless has_content
           lines << ""
           lines
         end
@@ -407,13 +471,33 @@ module RailsAiContext
 
         def section_devops(ctx)
           devops = ctx[:devops]
-          return [] unless devops.is_a?(Hash) && !devops[:error]
-
           lines = [ "## Deployment & DevOps", "" ]
-          lines << "Dockerfile: #{devops[:dockerfile] ? 'present' : 'not found'}."
-          lines << "Procfile: #{devops[:procfile] ? 'present' : 'not found'}." if devops.key?(:procfile)
-          deploy = devops[:deployment_method]
-          lines << "Deployment: #{deploy}." if deploy
+          has_content = false
+
+          if devops.is_a?(Hash) && !devops[:error]
+            lines << "Dockerfile: #{devops[:dockerfile] ? 'present' : 'not found'}."
+            lines << "Procfile: #{devops[:procfile] ? 'present' : 'not found'}." if devops.key?(:procfile)
+            deploy = devops[:deployment_method]
+            lines << "Deployment: #{deploy}." if deploy
+            has_content = true
+          end
+
+          # Fallback: check for Dockerfile/Procfile directly
+          unless has_content
+            root = Rails.root.to_s
+            has_dockerfile = File.exist?(File.join(root, "Dockerfile")) || File.exist?(File.join(root, "Dockerfile.dev"))
+            has_procfile = File.exist?(File.join(root, "Procfile")) || File.exist?(File.join(root, "Procfile.dev"))
+            has_ci = Dir.exist?(File.join(root, ".github", "workflows")) || File.exist?(File.join(root, ".gitlab-ci.yml"))
+
+            if has_dockerfile || has_procfile || has_ci
+              lines << "Dockerfile: #{has_dockerfile ? 'present' : 'not found'}."
+              lines << "Procfile: #{has_procfile ? 'present' : 'not found'}."
+              lines << "CI: #{has_ci ? 'detected' : 'not found'}."
+              has_content = true
+            end
+          end
+
+          return [] unless has_content
           lines << ""
           lines
         end

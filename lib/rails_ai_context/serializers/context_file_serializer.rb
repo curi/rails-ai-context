@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "fileutils"
+require "securerandom"
 
 module RailsAiContext
   module Serializers
@@ -127,7 +128,7 @@ module RailsAiContext
       def atomic_write(filepath, content)
         dir = File.dirname(filepath)
         FileUtils.mkdir_p(dir)
-        tmp = File.join(dir, ".#{File.basename(filepath)}.tmp")
+        tmp = File.join(dir, ".#{File.basename(filepath)}.#{SecureRandom.hex(4)}.tmp")
         File.write(tmp, content)
         File.rename(tmp, filepath)
       end

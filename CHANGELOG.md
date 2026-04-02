@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.3.2] — 2026-04-02
+
+### Fixed
+- **review_changes undefined variable** — `changed_tests` (NameError at runtime) replaced with correct `test_files` variable in `detect_warnings`
+- **N+1 introspector O(n*m*k) view scan** — `detect_n_plus_one` now pre-loads all view file contents once via `preload_view_contents` instead of re-globbing per model+association pair
+- **atomic write collision** — temp filenames now include `SecureRandom.hex(4)` suffix to prevent concurrent process collisions on the same file
+- **bare rescue; end across 7 serializers + 2 tools** — all 16 occurrences replaced with `rescue => e` + stderr logging so errors are visible instead of silently swallowed
+
+### Changed
+- Test count: 1176 → 1529 (+353 new tests)
+- 26 new spec files covering previously untested tools, serializer helpers, introspectors, and infrastructure (server, engine, resources, watcher)
+
 ## [4.3.1] — 2026-04-02
 
 ### Fixed

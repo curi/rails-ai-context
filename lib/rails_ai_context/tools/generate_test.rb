@@ -272,7 +272,7 @@ module RailsAiContext
           if factory
             lines << "    @#{setup_var} = create(:#{factory})"
           elsif fixtures
-            fixture_key = fixture_names.keys.find { |k| k.to_s.downcase == name.underscore.pluralize } ? ":one" : ":one"
+            fixture_key = resolve_fixture_key(name, fixture_names)
             lines << "    @#{setup_var} = #{name.underscore.pluralize}(#{fixture_key})"
           else
             lines << "    @#{setup_var} = #{name}.new"
@@ -471,10 +471,12 @@ module RailsAiContext
 
           has_devise = tests_data[:test_helper_setup]&.any? { |h| h.include?("Devise") }
           if has_devise
+            fixture_names = tests_data[:fixture_names] || {}
+            user_fixture_key = resolve_fixture_key("User", fixture_names)
             lines << "  include Devise::Test::IntegrationHelpers"
             lines << ""
             lines << "  setup do"
-            lines << "    @user = users(:one)"
+            lines << "    @user = users(#{user_fixture_key})"
             lines << "    sign_in @user"
             lines << "  end"
           end
@@ -490,12 +492,15 @@ module RailsAiContext
 
             lines << ""
             lines << "  test \"#{r[:verb]} #{r[:path]} works\" do"
+            fixture_names = tests_data[:fixture_names] || {}
             param_names.each do |param|
               if param == "id"
-                lines << "    #{param} = #{snake.pluralize}(:one).id"
+                fk = resolve_fixture_key(snake.singularize.camelize, fixture_names)
+                lines << "    #{param} = #{snake.pluralize}(#{fk}).id"
               elsif param.end_with?("_id")
                 resource = param.delete_suffix("_id")
-                lines << "    #{param} = #{resource.pluralize}(:one).id"
+                fk = resolve_fixture_key(resource.camelize, fixture_names)
+                lines << "    #{param} = #{resource.pluralize}(#{fk}).id"
               end
             end
             lines << "    #{verb} \"#{quoted_path}\""
@@ -554,6 +559,29 @@ module RailsAiContext
         end
 
         # ── Helpers ──────────────────────────────────────────────────────
+
+        # Resolve the best fixture key for a model by reading actual fixture file contents.
+        # Falls back to :one if no fixture file is found.
+        def resolve_fixture_key(model_name, fixture_names)
+          plural = model_name.underscore.pluralize
+          # fixture_names is { "users" => [:chef_one, :chef_two], "cooks" => [:pending_cook, ...] }
+          keys = fixture_names[plural] || fixture_names[plural.to_sym]
+          if keys.is_a?(Array) && keys.any?
+            ":#{keys.first}"
+          else
+            # Try reading the fixture file directly
+            fixture_file = File.join(Rails.root, "test", "fixtures", "#{plural}.yml")
+            if File.exist?(fixture_file)
+              content = File.read(fixture_file, encoding: "UTF-8", invalid: :replace, undef: :replace) rescue nil
+              if content
+                # YAML fixture files have top-level keys as fixture names
+                first_key = content.scan(/^([a-z_]\w*):/i).first&.first
+                return ":#{first_key}" if first_key
+              end
+            end
+            ":one"
+          end
+        end
 
         def find_factory_name(model_name, tests_data)
           factory_names = tests_data[:factory_names] || {}

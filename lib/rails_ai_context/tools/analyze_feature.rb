@@ -21,9 +21,14 @@ module RailsAiContext
 
       annotations(read_only_hint: true, destructive_hint: false, idempotent_hint: true, open_world_hint: false)
 
+      # Map well-known feature keywords to gem-based patterns
+      AUTH_KEYWORDS = %w[auth authentication login signup signin session devise omniauth].freeze
+      AUTH_GEM_NAMES = %w[devise omniauth rodauth sorcery clearance authlogic warden jwt].freeze
+
       def self.call(feature:, server_context: nil) # rubocop:disable Metrics
         feature = feature.to_s.strip
         return text_response("Please provide a feature keyword (e.g. 'cook', 'payment', 'authentication').") if feature.empty?
+        set_call_params(feature: feature)
 
         ctx = cached_context
         pattern = feature.downcase
@@ -48,6 +53,19 @@ module RailsAiContext
         discover_accessibility(ctx, pattern, lines)
         discover_components(ctx, pattern, lines)
 
+        # For auth-related keywords, also discover auth gems
+        if AUTH_KEYWORDS.include?(pattern)
+          gems = ctx[:gems]
+          if gems.is_a?(Hash) && !gems[:error]
+            notable = gems[:notable_gems] || []
+            auth_gems = notable.select { |g| AUTH_GEM_NAMES.include?(g[:name]) }
+            if auth_gems.any?
+              lines << "" << "## Auth Gems" << ""
+              auth_gems.each { |g| lines << "- **#{g[:name]}** #{g[:version]}#{g[:config] ? " (config: #{g[:config]})" : ""}" }
+            end
+          end
+        end
+
         # If nothing was discovered, return a clean "no match" with real suggestions
         has_content = lines.any? { |l| l.start_with?("## ") || l.start_with?("### ") }
         unless has_content
@@ -65,11 +83,16 @@ module RailsAiContext
         # --- AF: Models ---
         def discover_models(ctx, pattern, lines)
           models = ctx[:models] || {}
+
+          # For auth-related keywords, also match the User model and auth-related concerns
+          extra_auth_match = AUTH_KEYWORDS.include?(pattern)
+
           matched = models.select do |name, data|
             next false if data[:error]
             name.downcase.include?(pattern) ||
               data[:table_name]&.downcase&.include?(pattern) ||
-              name.underscore.include?(pattern)
+              name.underscore.include?(pattern) ||
+              (extra_auth_match && (name == "User" || data[:concerns]&.any? { |c| c.to_s.downcase.match?(/authenticat|devise/) }))
           end
 
           if matched.any?

@@ -48,6 +48,11 @@ module RailsAiContext
         total = 0
 
         files.each do |file|
+          if file.nil? || file.strip.empty?
+            results << "- (empty) \u2014 skipped (empty filename)"
+            next
+          end
+
           full_path = Rails.root.join(file)
 
           unless File.exist?(full_path)

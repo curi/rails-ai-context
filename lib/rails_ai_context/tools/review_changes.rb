@@ -186,7 +186,7 @@ module RailsAiContext
               result = GetModelDetails.call(model: model_name, detail: "standard")
               text = result.content.first[:text]
               lines << "" << "**Model context:** #{model_name}" unless text.include?("not found")
-            rescue; end
+            rescue => e; $stderr.puts "[rails-ai-context] Context lookup skipped: #{e.message}"; end
 
           when :controller
             ctrl_name = File.basename(file, ".rb").camelize
@@ -195,7 +195,7 @@ module RailsAiContext
               result = GetRoutes.call(controller: snake, detail: "summary")
               text = result.content.first[:text]
               lines << "" << "**Routes:**" << text unless text.include?("not found") || text.include?("No routes")
-            rescue; end
+            rescue => e; $stderr.puts "[rails-ai-context] Context lookup skipped: #{e.message}"; end
 
           when :migration
             # Parse migration for table/column info
@@ -211,7 +211,7 @@ module RailsAiContext
                       result = GetSchema.call(table: t, detail: "summary")
                       text = result.content.first[:text]
                       lines << "  #{t}: #{text.lines.first&.strip}" unless text.include?("not found")
-                    rescue; end
+                    rescue => e; $stderr.puts "[rails-ai-context] Context lookup skipped: #{e.message}"; end
                   end
                 end
               end
@@ -221,7 +221,7 @@ module RailsAiContext
             begin
               result = GetRoutes.call(detail: "summary")
               lines << "" << "**Current routes:** #{result.content.first[:text].lines.first&.strip}"
-            rescue; end
+            rescue => e; $stderr.puts "[rails-ai-context] Context lookup skipped: #{e.message}"; end
           end
 
           lines << ""
@@ -280,14 +280,15 @@ module RailsAiContext
           end
 
           # Check for controller changes without test changes
-          changed_ctrls = controller_files.map { |c| File.basename(c[:file], ".rb") }
-          changed_tests = test_files.map { |t| File.basename(t[:file], ".rb") }
-          changed_ctrls.each do |ctrl|
-            test_name = ctrl.sub("_controller", "_controller_test")
-            spec_name = ctrl.sub("_controller", "_controller_spec")
-            request_name = ctrl.sub("_controller", "_spec")
-            unless changed_tests.any? { |t| t == test_name || t == spec_name || t == request_name || t.include?(ctrl.delete_suffix("_controller")) }
-              warnings << "**No test changes**: `#{ctrl}.rb` was modified but no corresponding test file was changed"
+          controller_files.each do |entry|
+            basename = File.basename(entry[:file], ".rb")
+            next unless basename.end_with?("_controller")
+            test_name = basename.sub("_controller", "_controller_test")
+            spec_name = basename.sub("_controller", "_controller_spec")
+            request_name = basename.sub("_controller", "_spec")
+            ctrl_stem = basename.delete_suffix("_controller")
+            unless test_files.any? { |t| File.basename(t[:file], ".rb").then { |tb| tb == test_name || tb == spec_name || tb == request_name || tb.include?(ctrl_stem) } }
+              warnings << "**No test changes**: `#{entry[:file]}` was modified but no corresponding test file was changed"
             end
           end
 

@@ -103,26 +103,25 @@ module RailsAiContext
         controllers_dir = File.join(root, "app/controllers")
         return risks unless Dir.exist?(controllers_dir)
 
+        # Pre-scan all view files once to avoid O(n*m*k) glob inside nested loop
+        view_contents = preload_view_contents
+
         Dir.glob(File.join(controllers_dir, "**/*.rb")).each do |path|
           content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
           relative = path.sub("#{root}/", "")
 
-          # Pattern: Model.all or Model.where(...) followed by iteration
-          # without .includes
           model_data.each do |model|
             model[:has_many].each do |assoc|
-              # Check if controller fetches this model's collection without includes
               model_ref = Regexp.escape(model[:name])
               pattern = /#{model_ref}\.(all|where|order|limit|find_each)\b/
               next unless content.match?(pattern)
 
-              # Check if .includes is used for this association
               includes_pattern = /\.includes\(.*:#{Regexp.escape(assoc[:name])}/
               next if content.match?(includes_pattern)
 
-              # Check views for accessing association
-              view_pattern_found = check_views_for_association_access(model_ref, assoc[:name])
-              next unless view_pattern_found
+              # Check pre-loaded views for association access
+              assoc_pattern = /\.#{Regexp.escape(assoc[:name])}\b/
+              next unless view_contents.any? { |vc| vc.match?(assoc_pattern) }
 
               risks << {
                 model: model[:name],
@@ -132,23 +131,21 @@ module RailsAiContext
               }
             end
           end
-        rescue
+        rescue StandardError
           next
         end
 
         risks.uniq { |r| [ r[:model], r[:association], r[:controller] ] }
       end
 
-      def check_views_for_association_access(model_name, association_name)
+      def preload_view_contents
         views_dir = File.join(root, "app/views")
-        return false unless Dir.exist?(views_dir)
+        return [] unless Dir.exist?(views_dir)
 
-        # Check if any view iterates over the association
-        Dir.glob(File.join(views_dir, "**/*.{erb,haml,slim}")).any? do |path|
-          content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
-          content.match?(/\.#{Regexp.escape(association_name)}\b/)
-        rescue
-          false
+        Dir.glob(File.join(views_dir, "**/*.{erb,haml,slim}")).filter_map do |path|
+          File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+        rescue StandardError
+          nil
         end
       end
 

@@ -84,7 +84,7 @@ module RailsAiContext
               lines << "" << "**Global before_actions:** #{before_actions.join(', ')}"
             end
           end
-        rescue; end
+        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
 
         lines << ""
         lines << "ALWAYS use MCP tools for context — do NOT read reference files directly."
@@ -259,7 +259,7 @@ module RailsAiContext
               partials.each { |p| lines << "- #{p}" }
             end
           end
-        rescue; end
+        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
 
         # Helpers — so agents use existing helpers instead of creating new ones
         begin
@@ -272,7 +272,7 @@ module RailsAiContext
               lines << helper_methods.map { |m| "- #{m}" }.join("\n")
             end
           end
-        rescue; end
+        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
 
         # Stimulus controllers — so agents reuse existing controllers
         stim = context[:stimulus]

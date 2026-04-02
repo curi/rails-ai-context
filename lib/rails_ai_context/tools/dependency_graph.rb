@@ -41,6 +41,8 @@ module RailsAiContext
         model = model.to_s.strip if model
         depth = [ [ depth.to_i, 1 ].max, 3 ].min
 
+        set_call_params(model: model, depth: depth, format: format)
+
         # Build adjacency list from model associations
         graph = build_graph(models_data)
 
@@ -48,7 +50,8 @@ module RailsAiContext
           # Filter to subgraph centered on the model
           model_key = find_model_key(model, graph.keys)
           unless model_key
-            return not_found_response("model", model, graph.keys, recovery_tool: "rails_dependency_graph")
+            return not_found_response("Model", model, graph.keys.sort,
+              recovery_tool: "Call rails_dependency_graph() without model to see all models")
           end
           subgraph = extract_subgraph(graph, model_key, depth)
         else

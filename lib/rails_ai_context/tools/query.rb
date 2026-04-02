@@ -44,9 +44,20 @@ module RailsAiContext
       MULTI_STATEMENT  = /;\s*\S/
       ALLOWED_PREFIX   = /\A\s*(SELECT|WITH|SHOW|EXPLAIN|DESCRIBE|DESC)\b/i
 
+      # SQL injection tautology patterns: OR 1=1, OR true, OR ''='', UNION SELECT, etc.
+      TAUTOLOGY_PATTERNS = [
+        /\bOR\s+1\s*=\s*1\b/i,
+        /\bOR\s+true\b/i,
+        /\bOR\s+'[^']*'\s*=\s*'[^']*'/i,
+        /\bOR\s+"[^"]*"\s*=\s*"[^"]*"/i,
+        /\bOR\s+\d+\s*=\s*\d+/i,
+        /\bUNION\s+(ALL\s+)?SELECT\b/i
+      ].freeze
+
       HARD_ROW_CAP = 1000
 
       def self.call(sql: nil, limit: nil, format: "table", server_context: nil, **_extra)
+        set_call_params(sql: sql&.truncate(60))
         # ── Environment guard ───────────────────────────────────────
         unless config.allow_query_in_production || !Rails.env.production?
           return text_response(
@@ -114,6 +125,10 @@ module RailsAiContext
         return [ false, "Blocked: FOR UPDATE/SHARE clause" ] if cleaned.match?(BLOCKED_CLAUSES)
         return [ false, "Blocked: sensitive SHOW command" ] if cleaned.match?(BLOCKED_SHOWS)
         return [ false, "Blocked: SELECT INTO creates a table" ] if cleaned.match?(SELECT_INTO)
+
+        # Check for SQL injection tautology patterns (OR 1=1, UNION SELECT, etc.)
+        tautology = TAUTOLOGY_PATTERNS.find { |p| cleaned.match?(p) }
+        return [ false, "Blocked: SQL injection pattern detected (#{cleaned[tautology]})" ] if tautology
 
         # Check blocked keywords before the allowed-prefix fallback so that
         # INSERT/UPDATE/DELETE/DROP etc. get a specific "Blocked" error
@@ -222,6 +237,15 @@ module RailsAiContext
       # ── Column redaction (Layer 4) ──────────────────────────────────
       private_class_method def self.redact_results(result)
         redacted_cols = config.query_redacted_columns.map(&:downcase).to_set
+
+        # Auto-redact columns declared with `encrypts` in models
+        models_data = (SHARED_CACHE[:context] || cached_context)&.dig(:models)
+        if models_data.is_a?(Hash)
+          models_data.each_value do |data|
+            next unless data.is_a?(Hash)
+            (data[:encrypts] || []).each { |col| redacted_cols << col.to_s.downcase }
+          end
+        end
         columns = result.columns
         rows = result.rows
 

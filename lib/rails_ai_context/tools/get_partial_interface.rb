@@ -332,18 +332,24 @@ module RailsAiContext
       private_class_method def self.find_render_sites(views_dir, partial, root)
         sites = []
         # Build search names: the partial can be referenced multiple ways
+        # Normalize: strip underscore prefix from basename and extensions
         parts = partial.split("/")
         basename = parts.last.delete_prefix("_").sub(/\..*\z/, "")
         dir_prefix = parts[0...-1].join("/")
+
+        # Build the canonical render name (how Rails references partials in render calls)
+        # "shared/_status_badge.html.erb" → "shared/status_badge"
+        # "_status_badge" → "status_badge"
+        canonical = (dir_prefix.empty? ? basename : "#{dir_prefix}/#{basename}")
 
         # Possible render references:
         # render "shared/status_badge"
         # render partial: "shared/status_badge"
         # render "status_badge" (from same directory)
         search_patterns = [
-          partial.delete_prefix("_").sub(/\..*\z/, ""),          # shared/status_badge
-          basename                                                 # status_badge
-        ]
+          canonical,                                                # shared/status_badge
+          basename                                                  # status_badge
+        ].uniq
 
         view_files = Dir.glob(File.join(views_dir, "**", "*.{erb,haml,slim}")).sort
 
@@ -357,7 +363,8 @@ module RailsAiContext
           content.each_line.with_index(1) do |line, line_num|
             search_patterns.each do |search_name|
               # Match render "partial_name" or render partial: "partial_name"
-              next unless line.match?(/render\s.*["']#{Regexp.escape(search_name)}["']/)
+              # Allow content before search_name (e.g. "shared/status_badge" matches "status_badge")
+              next unless line.match?(/render\s.*["'][^"']*#{Regexp.escape(search_name)}["']/)
 
               # For short basename matches, verify directory context
               if search_name == basename && dir_prefix.length > 0

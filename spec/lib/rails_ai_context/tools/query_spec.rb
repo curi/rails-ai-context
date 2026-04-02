@@ -108,6 +108,42 @@ RSpec.describe RailsAiContext::Tools::Query do
       expect(error).to include("required")
     end
 
+    it "blocks OR 1=1 tautology injection" do
+      valid, error = described_class.validate_sql("SELECT * FROM users WHERE email = '' OR 1=1 --")
+      expect(valid).to be false
+      expect(error).to include("SQL injection pattern")
+    end
+
+    it "blocks OR true tautology injection" do
+      valid, error = described_class.validate_sql("SELECT * FROM users WHERE active = false OR true")
+      expect(valid).to be false
+      expect(error).to include("SQL injection pattern")
+    end
+
+    it "blocks UNION SELECT injection" do
+      valid, error = described_class.validate_sql("SELECT name FROM users UNION SELECT password FROM users")
+      expect(valid).to be false
+      expect(error).to include("SQL injection pattern")
+    end
+
+    it "blocks UNION ALL SELECT injection" do
+      valid, error = described_class.validate_sql("SELECT 1 UNION ALL SELECT 2")
+      expect(valid).to be false
+      expect(error).to include("SQL injection pattern")
+    end
+
+    it "blocks OR with string tautology" do
+      valid, error = described_class.validate_sql("SELECT * FROM users WHERE name = 'x' OR 'a'='a'")
+      expect(valid).to be false
+      expect(error).to include("SQL injection pattern")
+    end
+
+    it "allows legitimate OR conditions with column references" do
+      valid, error = described_class.validate_sql("SELECT * FROM users WHERE active = true OR admin = true")
+      expect(valid).to be true
+      expect(error).to be_nil
+    end
+
     it "returns error for nil SQL" do
       valid, error = described_class.validate_sql(nil)
       expect(valid).to be false

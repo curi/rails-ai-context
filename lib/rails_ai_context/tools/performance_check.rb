@@ -46,23 +46,40 @@ module RailsAiContext
           if models_data.is_a?(Hash) && !models_data[:error]
             model_names = models_data.keys.map(&:to_s)
             unless model_names.any? { |m| m.downcase == model.downcase }
-              return not_found_response("model", model, model_names, recovery_tool: "rails_performance_check")
+              return not_found_response("Model", model, model_names,
+                recovery_tool: "Call rails_performance_check() without model filter to see all issues")
             end
           end
         end
 
         lines = [ "# Performance Analysis", "" ]
 
-        summary = data[:summary] || {}
-        lines << "**Total issues found:** #{summary[:total_issues] || 0}"
+        # Collect all items then filter, so the count reflects actual displayed results
+        all_sections = {}
+        all_sections[:n_plus_one] = data[:n_plus_one_risks] || []
+        all_sections[:counter_cache] = data[:missing_counter_cache] || []
+        all_sections[:indexes] = data[:missing_fk_indexes] || []
+        all_sections[:model_all] = data[:model_all_in_controllers] || []
+        all_sections[:eager_load] = data[:eager_load_candidates] || []
+
+        # Apply model filter to count
+        filtered_count = if model && !model.empty?
+          all_sections.values.sum { |items| filter_items(items, model).size }
+        elsif category != "all"
+          (all_sections[category.to_sym] || []).size
+        else
+          all_sections.values.sum(&:size)
+        end
+
+        lines << "**Total issues found:** #{filtered_count}"
         lines << ""
 
         if detail == "summary"
-          lines << "- N+1 risks: #{summary[:n_plus_one_risks] || 0}"
-          lines << "- Missing counter_cache: #{summary[:missing_counter_cache] || 0}"
-          lines << "- Missing FK indexes: #{summary[:missing_fk_indexes] || 0}"
-          lines << "- Model.all in controllers: #{summary[:model_all_in_controllers] || 0}"
-          lines << "- Eager load candidates: #{summary[:eager_load_candidates] || 0}"
+          lines << "- N+1 risks: #{filter_items(all_sections[:n_plus_one], model).size}"
+          lines << "- Missing counter_cache: #{filter_items(all_sections[:counter_cache], model).size}"
+          lines << "- Missing FK indexes: #{filter_items(all_sections[:indexes], model).size}"
+          lines << "- Model.all in controllers: #{filter_items(all_sections[:model_all], model).size}"
+          lines << "- Eager load candidates: #{filter_items(all_sections[:eager_load], model).size}"
         else
           if category == "all" || category == "n_plus_one"
             lines.concat(render_section("N+1 Query Risks", data[:n_plus_one_risks], model, detail))
@@ -81,8 +98,8 @@ module RailsAiContext
           end
         end
 
-        if summary[:total_issues] == 0
-          lines << "No performance issues detected. Your app looks good!"
+        if filtered_count == 0
+          lines << "No performance issues detected#{model && !model.empty? ? " for #{model}" : ""}. Your app looks good!"
         end
 
         text_response(lines.join("\n"))
@@ -91,28 +108,28 @@ module RailsAiContext
       class << self
         private
 
+        def filter_items(items, model_filter)
+          return (items || []) unless model_filter && !model_filter.empty?
+          return [] unless items&.any?
+
+          filter_lower = model_filter.downcase
+          table_form = begin
+            model_filter.underscore.pluralize.downcase
+          rescue
+            filter_lower
+          end
+          items.select { |i|
+            (i[:model]&.downcase == filter_lower) ||
+            (i[:table]&.downcase == table_form) ||
+            (i[:table]&.downcase == filter_lower) ||
+            (i[:table]&.downcase == model_filter.underscore.downcase)
+          }
+        end
+
         def render_section(title, items, model_filter, detail)
           return [] unless items&.any?
 
-          filtered = if model_filter
-            filter_lower = model_filter.downcase
-            # Underscore BEFORE downcase to handle CamelCase → snake_case correctly
-            # "BrandProfile" → "brand_profile" → "brand_profiles"
-            table_form = begin
-              model_filter.underscore.pluralize.downcase
-            rescue
-              filter_lower
-            end
-            items.select { |i|
-              (i[:model]&.downcase == filter_lower) ||
-              (i[:table]&.downcase == table_form) ||
-              (i[:table]&.downcase == filter_lower) ||
-              (i[:table]&.downcase == model_filter.underscore.downcase)
-            }
-          else
-            items
-          end
-
+          filtered = filter_items(items, model_filter)
           return [] if filtered.empty?
 
           lines = [ "## #{title} (#{filtered.size})", "" ]

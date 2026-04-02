@@ -115,7 +115,7 @@ module RailsAiContext
             before_actions = source.scan(/before_action\s+:([\w!?]+)/).flatten
             lines << "**Global before_actions:** #{before_actions.join(', ')}" << "" if before_actions.any?
           end
-        rescue; end
+        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
 
         app_controllers.keys.sort.first(25).each do |name|
           info = app_controllers[name]
@@ -137,7 +137,7 @@ module RailsAiContext
               .reject { |s| s == "ApplicationService" }
             lines << "" << "**Services:** #{service_files.join(', ')}" if service_files.any?
           end
-        rescue; end
+        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
 
         # List jobs
         begin
@@ -149,7 +149,7 @@ module RailsAiContext
               .reject { |j| j == "ApplicationJob" }
             lines << "**Jobs:** #{job_files.join(', ')}" if job_files.any?
           end
-        rescue; end
+        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
 
         lines << ""
         lines << "Use `rails_get_controllers(controller:\"Name\", action:\"index\")` for one action's source code."

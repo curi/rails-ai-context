@@ -176,7 +176,7 @@ module RailsAiContext
               .map { |f| File.basename(f, ".rb").camelize }
               .reject { |s| s == "ApplicationService" }
             lines << "" << "**Services:** #{service_files.join(', ')}" if service_files.any?
-          rescue; end
+          rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
         end
 
         if dir_struct["app/jobs"]
@@ -186,7 +186,7 @@ module RailsAiContext
               .map { |f| File.basename(f, ".rb").camelize }
               .reject { |j| j == "ApplicationJob" }
             lines << "**Jobs:** #{job_files.join(', ')}" if job_files.any?
-          rescue; end
+          rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
         end
 
         lines << ""
@@ -263,7 +263,7 @@ module RailsAiContext
               lines << "- Global before_actions: #{before_actions.join(', ')}"
             end
           end
-        rescue; end
+        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
 
         lines << ""
         lines
