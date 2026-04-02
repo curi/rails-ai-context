@@ -12,6 +12,31 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/crisnahine/rails-ai-context?style=social)](https://github.com/crisnahine/rails-ai-context/stargazers)
 
+Your AI agent right now:
+
+- **Reads all 2,000 lines of schema.rb** to find one column type
+- **Misses encrypted columns** — doesn't know `gemini_api_key` is encrypted
+- **Shows 25 Devise methods** as if they're your code
+- **Doesn't see inherited filters** — misses `authenticate_user!` from ApplicationController
+- **Uses underscores in Stimulus HTML** — `data-cook_status` instead of `data-cook-status`
+- **Breaks Turbo Stream wiring** — broadcasts to channels nobody subscribes to
+- **Guesses your UI patterns** — invents new button styles instead of matching yours
+
+**Every wrong guess = a wasted iteration.** You fix it, re-run, it breaks something else. Multiply that by every task, every day.
+
+---
+
+## The fix is two commands
+
+```bash
+gem "rails-ai-context", group: :development
+rails generate rails_ai_context:install
+```
+
+![Install demo](demo.gif)
+
+Your AI now has 39 tools that understand your entire Rails app — schema, models, routes, controllers, views, Stimulus, Turbo, conventions. Via MCP server or CLI. Zero config.
+
 <p align="center">
   <a href="https://claude.ai/claude-code"><img src="https://img.shields.io/badge/Claude_Code-ee8b4a?style=for-the-badge&logo=anthropic&logoColor=white" alt="Claude Code"></a>
   <a href="https://cursor.com"><img src="https://img.shields.io/badge/Cursor-000000?style=for-the-badge&logo=cursor&logoColor=white" alt="Cursor"></a>
@@ -20,16 +45,15 @@
   <a href="#cli--works-everywhere-no-server-needed"><img src="https://img.shields.io/badge/Any_Terminal-4EAA25?style=for-the-badge&logo=gnubash&logoColor=white" alt="Any Terminal"></a>
 </p>
 
-```bash
-gem "rails-ai-context", group: :development
-rails generate rails_ai_context:install
-```
+---
 
-That's it. Your AI now has 39 tools that understand your entire Rails app — via MCP server or CLI. Zero config.
+## See the difference
 
-![Install demo](demo.gif)
+One call. Full picture.
 
-> **[Full Guide →](docs/GUIDE.md)** — every command, every parameter, every configuration option.
+![Trace demo](demo-trace.gif)
+
+Definition + source code + every caller grouped by type + what it calls internally. **One call replaces 6 file reads.**
 
 ---
 
@@ -57,33 +81,9 @@ rails 'ai:tool[schema]' table=users
 rails 'ai:tool[analyze_feature]' feature=billing
 ```
 
-Same 39 tools. Same output. AI agents run these as shell commands. **Works in any terminal, any AI tool, any workflow.** No MCP client required.
+Same 39 tools. Same output. **Works in any terminal, any AI tool, any workflow.** No MCP client required.
 
----
-
-## What AI gets wrong without this
-
-Your AI agent right now:
-
-- **Reads all 2,000 lines of schema.rb** to find one column type
-- **Misses encrypted columns** — doesn't know `gemini_api_key` is encrypted
-- **Shows 25 Devise methods** as if they're your code
-- **Doesn't see inherited filters** — misses `authenticate_user!` from ApplicationController
-- **Uses underscores in Stimulus HTML** — `data-cook_status` instead of `data-cook-status`
-- **Breaks Turbo Stream wiring** — broadcasts to channels nobody subscribes to
-- **Guesses your UI patterns** — invents new button styles instead of matching yours
-
-**Every wrong guess = a wasted iteration.** You fix it, re-run, it breaks something else.
-
----
-
-## What AI knows with this
-
-One call. Full picture.
-
-![Trace demo](demo-trace.gif)
-
-Definition + source code + every caller grouped by type + what it calls internally. **One call replaces 6 file reads.**
+> **[Full Guide →](docs/GUIDE.md)** — every command, every parameter, every configuration option.
 
 ---
 
