@@ -21,12 +21,12 @@ structure to AI assistants via the Model Context Protocol (MCP).
 - `lib/rails_ai_context/watcher.rb` — File watcher for auto-regenerating context files
 - `lib/rails_ai_context/engine.rb` — Rails Engine for auto-integration
 - `lib/generators/rails_ai_context/install/` — Install generator (creates .mcp.json, initializer, context files)
-- `exe/rails-ai-context` — Standalone Thor CLI (serve, context, inspect, watch, doctor, tool, version)
+- `exe/rails-ai-context` — Standalone Thor CLI (init, serve, context, inspect, watch, doctor, tool, version) — works without Gemfile entry via `gem install`
 
 ## Key Design Decisions
 
 1. **Built on official mcp SDK** — not a custom protocol implementation
-2. **Zero-config** — Railtie auto-registers at boot, introspects without setup
+2. **Sensible defaults** — works standalone (`gem install` + `rails-ai-context init`) or in-Gemfile with Railtie auto-registration
 3. **Graceful degradation** — works without DB by parsing schema.rb as text
 4. **Read-only tools only** — all MCP tools are annotated as non-destructive
 5. **Sensitive pattern blocking** — search/read tools reject `.env`, `*.key`, `*.pem` and other secret files via `sensitive_patterns`
@@ -58,6 +58,10 @@ structure to AI assistants via the Model Context Protocol (MCP).
 31. **Log reading** — reverse file tail with level filtering and sensitive data redaction
 32. **Config validation** — `http_port`, `cache_ttl`, `max_tool_response_chars`, `query_row_limit` validated on assignment with clear error messages
 33. **Sensitive column redaction** — query tool redacts columns by name AND by suffix pattern (password, secret, token, key, digest, hash) to prevent alias bypass
+34. **Standalone mode** — `gem install rails-ai-context && rails-ai-context init` works without Gemfile entry. CLI pre-loads gem before Rails boot, restores `$LOAD_PATH` entries stripped by `Bundler.setup`. Config from `.rails-ai-context.yml`.
+35. **YAML config** — `.rails-ai-context.yml` as alternative to initializer. Supports all config options except `custom_tools` (Ruby classes) and `excluded_concerns` (regex). Precedence: initializer > YAML > defaults.
+36. **Config auto-loading** — `Configuration.auto_load!` checks `configured_via_block?` flag. If initializer ran, YAML is skipped. Corrupted YAML degrades gracefully with a warning.
+37. **Three install paths** — In-Gemfile (`rails generate rails_ai_context:install`), Standalone (`rails-ai-context init`), Zero config (just run `rails-ai-context serve` with defaults). Users can switch between paths freely; `.mcp.json` command is updated on re-init/re-install.
 
 ## Testing
 

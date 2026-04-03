@@ -1,7 +1,73 @@
 # frozen_string_literal: true
 
+require "yaml"
+
 module RailsAiContext
   class Configuration
+    CONFIG_FILENAME = ".rails-ai-context.yml"
+
+    # Keys that require symbol conversion (string → symbol or array of symbols)
+    SYMBOL_KEYS = %i[tool_mode preset context_mode live_reload].freeze
+    SYMBOL_ARRAY_KEYS = %i[ai_tools introspectors].freeze
+
+    # All YAML-supported keys (explicit allowlist for safety)
+    YAML_KEYS = %i[
+      ai_tools tool_mode preset context_mode generate_root_files claude_max_lines
+      server_name server_version cache_ttl max_tool_response_chars
+      live_reload live_reload_debounce auto_mount http_path http_bind http_port
+      output_dir skip_tools excluded_models excluded_controllers
+      excluded_route_prefixes excluded_filters excluded_middleware excluded_paths
+      sensitive_patterns search_extensions concern_paths frontend_paths mobile_paths
+      max_file_size max_test_file_size max_schema_file_size max_view_total_size
+      max_view_file_size max_search_results max_validate_files
+      query_timeout query_row_limit query_redacted_columns allow_query_in_production
+      log_lines introspectors
+    ].freeze
+
+    # Load configuration from a YAML file, applying values to the current config instance.
+    # Only keys present in the YAML are set; absent keys keep their defaults.
+    def self.load_from_yaml(path)
+      return unless File.exist?(path)
+
+      data = YAML.safe_load_file(path, permitted_classes: [ Symbol ]) || {}
+      config = RailsAiContext.configuration
+
+      data.each do |key, value|
+        key_sym = key.to_sym
+        next unless YAML_KEYS.include?(key_sym)
+        next if value.nil?
+
+        value = coerce_value(key_sym, value)
+        config.public_send(:"#{key_sym}=", value)
+      end
+
+      config
+    rescue Psych::SyntaxError, Psych::DisallowedClass => e
+      $stderr.puts "[rails-ai-context] WARNING: #{path} has invalid YAML (#{e.message}). Using defaults."
+      nil
+    end
+
+    # Auto-load config from .rails-ai-context.yml if no initializer configure block ran.
+    # Safe to call multiple times (idempotent).
+    def self.auto_load!(dir = nil)
+      return if RailsAiContext.configured_via_block?
+
+      dir ||= defined?(Rails) && Rails.respond_to?(:root) && Rails.root ? Rails.root.to_s : Dir.pwd
+      yaml_path = File.join(dir, CONFIG_FILENAME)
+      load_from_yaml(yaml_path) if File.exist?(yaml_path)
+    end
+
+    def self.coerce_value(key, value)
+      if SYMBOL_KEYS.include?(key)
+        value.respond_to?(:to_sym) ? value.to_sym : value
+      elsif SYMBOL_ARRAY_KEYS.include?(key)
+        Array(value).map(&:to_sym)
+      else
+        value
+      end
+    end
+    private_class_method :coerce_value
+
     PRESETS = {
       standard: %i[schema models routes jobs gems conventions controllers tests migrations stimulus
                    view_templates design_tokens config components

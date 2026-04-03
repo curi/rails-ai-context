@@ -8,7 +8,7 @@ Gem::Specification.new do |spec|
   spec.authors       = [ "crisnahine" ]
   spec.email         = [ "crisjosephnahine@gmail.com" ]
 
-  spec.summary       = "Give AI agents a complete mental model of your Rails app — 39 tools via MCP or CLI. Zero config."
+  spec.summary       = "Give AI agents a complete mental model of your Rails app — 39 tools via MCP or CLI. Standalone or in-Gemfile."
   spec.description   = <<~DESC
     rails-ai-context gives AI coding agents a complete mental model of your Rails
     app — not just files, but how schema, models, routes, controllers, views, and
@@ -16,7 +16,7 @@ Gem::Specification.new do |spec|
     structure on demand with semantic validation that catches cross-file errors
     (wrong columns, missing partials, broken routes) before code runs.
     Auto-generates context files for Claude Code, Cursor, GitHub Copilot, and
-    OpenCode. Zero config.
+    OpenCode. Works standalone or in-Gemfile.
   DESC
 
   spec.homepage      = "https://github.com/crisnahine/rails-ai-context"
@@ -33,11 +33,17 @@ Gem::Specification.new do |spec|
   spec.metadata["rubygems_mfa_required"] = "true"
 
   spec.post_install_message = <<~MSG
-    rails-ai-context installed! Quick start:
+    rails-ai-context installed!
+
+    Standalone (no Gemfile entry needed):
+      cd your-rails-app
+      rails-ai-context init           # interactive setup
+      rails-ai-context serve          # start MCP server
+
+    Or add to Gemfile:
+      gem "rails-ai-context", group: :development
       rails generate rails_ai_context:install
-      rails ai:context              # generate context files
-      rails 'ai:tool[schema]'      # run any of the 39 tools from CLI
-      rails ai:serve                # start MCP server (optional)
+      rails ai:serve
   MSG
 
   spec.files = Dir.chdir(__dir__) do

@@ -51,6 +51,15 @@ gem "rails-ai-context", group: :development
 rails generate rails_ai_context:install
 ```
 
+### Or standalone — no Gemfile needed
+
+```bash
+gem install rails-ai-context
+cd your-rails-app
+rails-ai-context init     # interactive setup
+rails-ai-context serve    # start MCP server
+```
+
 <div align="center">
 
 ![Install demo](demo.gif)
@@ -341,7 +350,7 @@ Every tool is **read-only** and returns structured, token-efficient context.
                          ▼
 ┌─────────────────────────────────────────────────────────┐
 │  rails-ai-context                                        │
-│  Parses everything. Caches results. Zero config.         │
+│  Parses everything. Caches results. Sensible defaults.    │
 └────────┬──────────────────┬──────────────┬──────────────┘
          │                  │              │
          ▼                  ▼              ▼
@@ -357,27 +366,35 @@ Every tool is **read-only** and returns structured, token-efficient context.
 
 ## Install
 
+**Option A — In Gemfile:**
+
 ```bash
 gem "rails-ai-context", group: :development
 rails generate rails_ai_context:install
 ```
 
-The installer asks which AI tools you use and whether you want MCP or CLI mode. That's it.
+**Option B — Standalone (no Gemfile entry needed):**
 
-`.mcp.json` is auto-detected by Claude Code and Cursor — no manual config.
+```bash
+gem install rails-ai-context
+cd your-rails-app
+rails-ai-context init
+```
+
+Both paths ask which AI tools you use and whether you want MCP or CLI mode. `.mcp.json` is auto-detected by Claude Code and Cursor.
 
 <br>
 
 ## Commands
 
-| Command | What it does |
-|:--------|:------------|
-| `rails ai:context` | Generate context files for your AI tools |
-| `rails 'ai:tool[NAME]'` | Run any of the 39 tools from CLI |
-| `rails ai:tool` | List all available tools |
-| `rails ai:serve` | Start MCP server (stdio) |
-| `rails ai:doctor` | Diagnostics + AI readiness score |
-| `rails ai:watch` | Auto-regenerate on file changes |
+| In-Gemfile | Standalone | What it does |
+|:-----------|:-----------|:------------|
+| `rails ai:context` | `rails-ai-context context` | Generate context files |
+| `rails 'ai:tool[NAME]'` | `rails-ai-context tool NAME` | Run any of the 39 tools |
+| `rails ai:tool` | `rails-ai-context tool --list` | List all available tools |
+| `rails ai:serve` | `rails-ai-context serve` | Start MCP server (stdio) |
+| `rails ai:doctor` | `rails-ai-context doctor` | Diagnostics + AI readiness score |
+| `rails ai:watch` | `rails-ai-context watch` | Auto-regenerate on file changes |
 
 <br>
 
@@ -427,7 +444,7 @@ end
 ## About
 
 Built by a Rails developer with 10+ years of production experience.<br>
-1529 tests. 39 tools. 33 introspectors. Zero config.<br>
+1529 tests. 39 tools. 33 introspectors. Standalone or in-Gemfile.<br>
 MIT licensed. [Contributions welcome.](CONTRIBUTING.md)
 
 <br>

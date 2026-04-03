@@ -2,13 +2,15 @@
 # frozen_string_literal: true
 
 require "thor"
+require "yaml"
 
-module RailsAiContext
-  class CLI < Thor
+# Top-level class to avoid conflict with RailsAiContext::CLI module (which contains ToolRunner).
+# The library uses RailsAiContext::CLI as a module namespace; this exe needs a class for Thor.
+class RailsAiContextCLI < Thor
     # Let Thor pass unknown options through to ToolRunner for the tool command
     stop_on_unknown_option! :tool
 
-    desc "tool [NAME]", "Run an MCP tool (25 available). Use --list to see all."
+    desc "tool [NAME]", "Run an MCP tool (39 available). Use --list to see all."
     option :json, type: :boolean, default: false, desc: "Output as JSON envelope"
     option :list, type: :boolean, default: false, desc: "List available tools"
     def tool(name = nil, *args)
@@ -106,6 +108,40 @@ module RailsAiContext
       $stderr.puts "AI Readiness Score: #{result[:score]}/100"
     end
 
+    desc "init", "Set up rails-ai-context for standalone use (creates .rails-ai-context.yml and .mcp.json)"
+    def init
+      config_path = File.join(Dir.pwd, "config", "environment.rb")
+      unless File.exist?(config_path)
+        $stderr.puts "Error: No Rails app found in #{Dir.pwd}"
+        $stderr.puts "Run this command from your Rails app root directory."
+        exit 1
+      end
+
+      # --- Prompts (no Rails needed) ---
+      ai_tools = prompt_ai_tools
+      tool_mode = prompt_tool_mode
+
+      # --- Write .rails-ai-context.yml ---
+      write_yaml_config(ai_tools, tool_mode)
+
+      # --- Write .mcp.json (MCP mode only) ---
+      write_standalone_mcp_json if tool_mode == :mcp
+
+      # --- Boot Rails, load config, generate context ---
+      boot_rails!
+
+      $stderr.puts ""
+      $stderr.puts "Generating AI context files..."
+      ai_tools.each do |fmt|
+        result = RailsAiContext.generate_context(format: fmt)
+        (result[:written] || []).each { |f| $stderr.puts "  Written: #{f}" }
+        (result[:skipped] || []).each { |f| $stderr.puts "  Skipped: #{f} (unchanged)" }
+      end
+
+      # --- Instructions ---
+      show_standalone_instructions(ai_tools, tool_mode)
+    end
+
     desc "version", "Print version"
     def version
       require_relative "../lib/rails_ai_context/version"
@@ -114,18 +150,145 @@ module RailsAiContext
 
     private
 
-    def boot_rails!
-      # Try to find and boot the Rails app
-      config_path = File.join(Dir.pwd, "config", "environment.rb")
-      if File.exist?(config_path)
-        require config_path
+    AI_TOOL_OPTIONS = {
+      "1" => { key: :claude,   name: "Claude Code",    files: "CLAUDE.md + .claude/rules/" },
+      "2" => { key: :cursor,   name: "Cursor",         files: ".cursor/rules/" },
+      "3" => { key: :copilot,  name: "GitHub Copilot", files: ".github/copilot-instructions.md + .github/instructions/" },
+      "4" => { key: :opencode, name: "OpenCode",       files: "AGENTS.md" }
+    }.freeze
+
+    def prompt_ai_tools
+      $stderr.puts ""
+      $stderr.puts "Which AI tools do you use? (select all that apply)"
+      $stderr.puts ""
+      AI_TOOL_OPTIONS.each { |num, info| $stderr.puts "  #{num}. #{info[:name].ljust(16)} -> #{info[:files]}" }
+      $stderr.puts "  a. All of the above"
+      $stderr.puts ""
+      $stderr.print "Enter numbers separated by commas (e.g. 1,2) or 'a' for all: "
+      input = $stdin.gets&.strip&.downcase || "a"
+
+      selected = if input == "a" || input == "all" || input.empty?
+        AI_TOOL_OPTIONS.values.map { |t| t[:key] }
       else
+        input.split(/[\s,]+/).filter_map { |n| AI_TOOL_OPTIONS[n]&.dig(:key) }
+      end
+
+      if selected.empty?
+        $stderr.puts "No tools selected — using all."
+        selected = AI_TOOL_OPTIONS.values.map { |t| t[:key] }
+      end
+
+      names = AI_TOOL_OPTIONS.values.select { |t| selected.include?(t[:key]) }.map { |t| t[:name] }
+      $stderr.puts "Selected: #{names.join(', ')}"
+      selected
+    end
+
+    def prompt_tool_mode
+      $stderr.puts ""
+      $stderr.puts "Do you also want MCP server support?"
+      $stderr.puts ""
+      $stderr.puts "  1. Yes — MCP server (generates .mcp.json)"
+      $stderr.puts "  2. No  — CLI only (no server needed)"
+      $stderr.puts ""
+      $stderr.print "Enter number (default: 1): "
+      input = $stdin.gets&.strip || "1"
+
+      mode = input == "2" ? :cli : :mcp
+      label = mode == :mcp ? "MCP server" : "CLI only"
+      $stderr.puts "Selected: #{label}"
+      mode
+    end
+
+    def write_yaml_config(ai_tools, tool_mode)
+      yaml_path = File.join(Dir.pwd, ".rails-ai-context.yml")
+      content = {
+        "ai_tools" => ai_tools.map(&:to_s),
+        "tool_mode" => tool_mode.to_s
+      }
+      File.write(yaml_path, YAML.dump(content))
+      $stderr.puts "Created .rails-ai-context.yml"
+    end
+
+    def write_standalone_mcp_json
+      require "json"
+      mcp_path = File.join(Dir.pwd, ".mcp.json")
+      server_entry = { "command" => "rails-ai-context", "args" => [ "serve" ] }
+
+      if File.exist?(mcp_path)
+        existing = JSON.parse(File.read(mcp_path)) rescue {}
+        existing["mcpServers"] ||= {}
+        if existing["mcpServers"]["rails-ai-context"] == server_entry
+          $stderr.puts ".mcp.json already up to date — skipped"
+        else
+          existing["mcpServers"]["rails-ai-context"] = server_entry
+          File.write(mcp_path, JSON.pretty_generate(existing) + "\n")
+          $stderr.puts "Updated rails-ai-context in .mcp.json"
+        end
+      else
+        content = JSON.pretty_generate({ mcpServers: { "rails-ai-context" => server_entry } }) + "\n"
+        File.write(mcp_path, content)
+        $stderr.puts "Created .mcp.json (auto-discovered by Claude Code, Cursor, etc.)"
+      end
+    end
+
+    def show_standalone_instructions(ai_tools, tool_mode)
+      $stderr.puts ""
+      $stderr.puts "=" * 50
+      $stderr.puts " rails-ai-context initialized!"
+      $stderr.puts "=" * 50
+      $stderr.puts ""
+      $stderr.puts "Your setup:"
+      AI_TOOL_OPTIONS.each_value do |info|
+        next unless ai_tools.include?(info[:key])
+        $stderr.puts "  #{info[:name].ljust(16)} -> #{info[:files]}"
+      end
+      $stderr.puts ""
+      $stderr.puts "Commands:"
+      $stderr.puts "  rails-ai-context context    # Regenerate context files"
+      $stderr.puts "  rails-ai-context tool NAME  # Run any of the 39 tools"
+      if tool_mode == :mcp
+        $stderr.puts "  rails-ai-context serve      # Start MCP server"
+      end
+      $stderr.puts "  rails-ai-context doctor     # Check AI readiness"
+      $stderr.puts ""
+      if tool_mode == :mcp
+        $stderr.puts "MCP auto-discovery:"
+        $stderr.puts "  .mcp.json is auto-detected by Claude Code and Cursor."
+        $stderr.puts "  No manual config needed — just open your project."
+      else
+        $stderr.puts "CLI tools:"
+        $stderr.puts "  AI agents can run `rails-ai-context tool schema table=users` directly."
+      end
+      $stderr.puts ""
+      $stderr.puts "Config: .rails-ai-context.yml (edit anytime, no restart needed)"
+      $stderr.puts ""
+    end
+
+    def boot_rails!
+      config_path = File.join(Dir.pwd, "config", "environment.rb")
+      unless File.exist?(config_path)
         $stderr.puts "Error: No Rails app found in #{Dir.pwd}"
         $stderr.puts "Run this command from your Rails app root directory."
         exit 1
       end
+
+      # Load gem + dependencies BEFORE Rails boot.
+      # Bundler.setup (in config/boot.rb) strips $LOAD_PATH to Gemfile-only gems.
+      # In standalone mode (gem not in Gemfile), this would remove our gem and mcp.
+      # Loading first ensures Zeitwerk's autoload paths (absolute, not $LOAD_PATH-
+      # dependent) are configured, and we can restore stripped paths after boot.
+      require "mcp"
+      require "rails_ai_context"
+      pre_boot_paths = $LOAD_PATH.dup
+
+      require config_path
+
+      # Restore dependency paths that Bundler.setup stripped (standalone mode).
+      # For Gemfile users, this is a no-op — no paths were removed.
+      (pre_boot_paths - $LOAD_PATH).each { |p| $LOAD_PATH << p }
+
+      RailsAiContext::Configuration.auto_load!
     end
-  end
 end
 
-RailsAiContext::CLI.start(ARGV)
+RailsAiContextCLI.start(ARGV)

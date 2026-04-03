@@ -22,7 +22,12 @@ module RailsAiContext
     end
 
     def configure
+      @configured_via_block = true
       yield(configuration)
+    end
+
+    def configured_via_block?
+      @configured_via_block || false
     end
 
     # Quick access to introspect the current Rails app

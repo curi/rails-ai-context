@@ -143,6 +143,20 @@ rescue => e
   nil
 end unless defined?(save_ai_tools_to_initializer)
 
+def save_yaml_config(ai_tools, tool_mode)
+  require "yaml"
+  yaml_path = Rails.root.join(".rails-ai-context.yml")
+  content = {
+    "ai_tools" => Array(ai_tools).map(&:to_s),
+    "tool_mode" => tool_mode.to_s
+  }
+  File.write(yaml_path, YAML.dump(content))
+  puts "💾 Saved .rails-ai-context.yml (standalone config)"
+rescue => e
+  $stderr.puts "[rails-ai-context] save_yaml_config failed: #{e.message}" if ENV["DEBUG"]
+  nil
+end unless defined?(save_yaml_config)
+
 def add_ai_tool_to_initializer(format)
   init_path = Rails.root.join("config/initializers/rails_ai_context.rb")
   return unless File.exist?(init_path)
@@ -236,6 +250,10 @@ namespace :ai do
       RailsAiContext.configuration.tool_mode = tool_mode
       save_tool_mode_to_initializer(tool_mode)
     end
+
+    # Write .rails-ai-context.yml alongside initializer (enables standalone mode)
+    save_yaml_config(ai_tools || RailsAiContext.configuration.ai_tools,
+                     RailsAiContext.configuration.tool_mode)
 
     # Auto-create .mcp.json when tool_mode is :mcp and it doesn't exist
     ensure_mcp_json if RailsAiContext.configuration.tool_mode == :mcp

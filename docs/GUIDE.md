@@ -29,35 +29,35 @@
 
 ## Installation
 
-### New project
+### Option A: In Gemfile
 
 ```bash
-bundle add rails-ai-context
+gem "rails-ai-context", group: :development
+bundle install
 rails generate rails_ai_context:install
 rails ai:context
 ```
 
 This creates:
 1. `config/initializers/rails_ai_context.rb` — configuration file
-2. `.mcp.json` — MCP auto-discovery for Claude Code and Cursor
-3. 29 context files — tailored for each AI assistant
+2. `.rails-ai-context.yml` — standalone config (enables switching later)
+3. `.mcp.json` — MCP auto-discovery for Claude Code and Cursor
+4. Context files — tailored for each AI assistant
 
-### Existing project
+### Option B: Standalone (no Gemfile entry needed)
 
 ```bash
-# Add to Gemfile
-gem "rails-ai-context"
-
-# Install
-bundle install
-rails generate rails_ai_context:install
-
-# Generate context files
-rails ai:context
-
-# Verify everything works
-rails ai:doctor
+gem install rails-ai-context
+cd your-rails-app
+rails-ai-context init
 ```
+
+This creates:
+1. `.rails-ai-context.yml` — configuration file
+2. `.mcp.json` — MCP auto-discovery (if MCP mode selected)
+3. Context files — tailored for each AI assistant
+
+No Gemfile entry, no initializer, no files in your project besides config and context.
 
 ### What the install generator does
 
@@ -220,9 +220,10 @@ Commit **all files except `.ai-context.json`** (which is gitignored). This gives
 
 ### Standalone CLI
 
-The gem ships a `rails-ai-context` executable as an alternative to rake tasks. Useful for `.mcp.json` configs or when you prefer a shorter command.
+The gem ships a `rails-ai-context` executable that works **without adding the gem to your Gemfile**. Install globally with `gem install rails-ai-context`, then run from any Rails app directory.
 
 ```bash
+rails-ai-context init                      # Interactive setup (creates .rails-ai-context.yml + .mcp.json)
 rails-ai-context serve                     # Start MCP server (stdio)
 rails-ai-context serve --transport http    # Start MCP server (HTTP, port 6029)
 rails-ai-context serve --transport http --port 8080  # Custom port
@@ -240,6 +241,8 @@ rails-ai-context help                      # Show all commands
 ```
 
 Must be run from your Rails app root directory (requires `config/environment.rb`).
+
+**Config:** Standalone mode reads from `.rails-ai-context.yml` (created by `init`). If no config file exists, defaults are used. If the gem is also in the Gemfile, the initializer takes precedence over the YAML file.
 
 ### Legacy command
 
@@ -1042,14 +1045,27 @@ curl "https://registry.modelcontextprotocol.io/v0.1/servers?search=rails-ai-cont
 
 ### Auto-discovery (recommended)
 
-The install generator creates `.mcp.json` in your project root:
+The install generator (or `rails-ai-context init`) creates `.mcp.json` in your project root:
 
+**In-Gemfile:**
 ```json
 {
   "mcpServers": {
     "rails-ai-context": {
       "command": "bundle",
       "args": ["exec", "rails", "ai:serve"]
+    }
+  }
+}
+```
+
+**Standalone:**
+```json
+{
+  "mcpServers": {
+    "rails-ai-context": {
+      "command": "rails-ai-context",
+      "args": ["serve"]
     }
   }
 }
@@ -1062,7 +1078,11 @@ The install generator creates `.mcp.json` in your project root:
 Auto-discovered via `.mcp.json`. Or add manually:
 
 ```bash
+# In-Gemfile
 claude mcp add rails-ai-context -- bundle exec rails ai:serve
+
+# Standalone
+claude mcp add rails-ai-context -- rails-ai-context serve
 ```
 
 ### Claude Desktop
@@ -1081,6 +1101,8 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 }
 ```
 
+Or for standalone: replace `"command": "bundle"` / `"args": ["exec", "rails", "ai:serve"]` with `"command": "rails-ai-context"` / `"args": ["serve"]`.
+
 ### Cursor
 
 Auto-discovered via `.mcp.json`. Or add manually in **Cursor Settings > MCP**:
@@ -1095,6 +1117,9 @@ Auto-discovered via `.mcp.json`. Or add manually in **Cursor Settings > MCP**:
     }
   }
 }
+```
+
+For standalone: use `"command": "rails-ai-context"` / `"args": ["serve"]` instead.
 ```
 
 ### HTTP transport
@@ -1402,6 +1427,19 @@ config.introspectors = %i[schema models routes gems auth api]
     "rails-ai-context": {
       "type": "local",
       "command": ["bundle", "exec", "rails", "ai:serve"]
+    }
+  }
+}
+```
+
+For standalone: use `"command": ["rails-ai-context", "serve"]` instead.
+
+```json
+{
+  "mcp": {
+    "rails-ai-context": {
+      "type": "local",
+      "command": ["rails-ai-context", "serve"]
     }
   }
 }

@@ -138,12 +138,13 @@ module RailsAiContext
           existing = JSON.parse(File.read(mcp_path)) rescue {}
           existing["mcpServers"] ||= {}
 
-          if existing["mcpServers"]["rails-ai-context"]
-            say ".mcp.json already has rails-ai-context — skipped", :yellow
+          if existing["mcpServers"]["rails-ai-context"] == server_entry
+            say ".mcp.json already up to date — skipped", :yellow
           else
             existing["mcpServers"]["rails-ai-context"] = server_entry
             File.write(mcp_path, JSON.pretty_generate(existing) + "\n")
-            say "Added rails-ai-context to existing .mcp.json", :green
+            verb = existing["mcpServers"].key?("rails-ai-context") ? "Updated" : "Added"
+            say "#{verb} rails-ai-context in .mcp.json", :green
           end
         else
           create_file ".mcp.json", JSON.pretty_generate({
@@ -383,6 +384,18 @@ module RailsAiContext
       end
       end # no_tasks
 
+      def create_yaml_config
+        yaml_path = Rails.root.join(".rails-ai-context.yml")
+        content = {
+          "ai_tools" => @selected_formats.map(&:to_s),
+          "tool_mode" => @tool_mode.to_s
+        }
+
+        require "yaml"
+        File.write(yaml_path, YAML.dump(content))
+        say "Created .rails-ai-context.yml (standalone config)", :green
+      end
+
       def add_to_gitignore
         gitignore = Rails.root.join(".gitignore")
         return unless File.exist?(gitignore)
@@ -458,6 +471,11 @@ module RailsAiContext
         say "  rails ai:context:cursor   # Generate for Cursor"
         say "  rails ai:context:copilot  # Generate for Copilot"
         say "  rails generate rails_ai_context:install  # Re-run to pick tools"
+        say ""
+        say "Standalone (no Gemfile needed):", :yellow
+        say "  gem install rails-ai-context"
+        say "  rails-ai-context init          # interactive setup"
+        say "  rails-ai-context serve         # start MCP server"
         say ""
         say "Commit context files and .mcp.json so your team benefits!", :green
       end
