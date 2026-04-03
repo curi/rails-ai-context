@@ -17,7 +17,8 @@ module RailsAiContext
         {
           custom_middleware: custom,
           middleware_stack: extract_middleware_stack,
-          middleware_count: middleware_count(custom)
+          middleware_count: middleware_count(custom),
+          middleware_from_initializers: detect_middleware_from_initializers
         }
       rescue => e
         { error: e.message }
@@ -78,6 +79,24 @@ module RailsAiContext
       rescue => e
         $stderr.puts "[rails-ai-context] middleware_count failed: #{e.message}" if ENV["DEBUG"]
         {}
+      end
+
+      def detect_middleware_from_initializers
+        init_dir = File.join(root, "config/initializers")
+        return [] unless Dir.exist?(init_dir)
+
+        additions = []
+        Dir.glob(File.join(init_dir, "*.rb")).each do |path|
+          content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+          content.scan(/config\.middleware\.(?:use|insert_before|insert_after|insert|unshift)\s+(\S+)/).each do |match|
+            name = match[0].gsub(/,.*/, "").strip
+            additions << { middleware: name, file: File.basename(path) } unless name.empty?
+          end
+        end
+        additions.uniq
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_middleware_from_initializers failed: #{e.message}" if ENV["DEBUG"]
+        []
       end
 
       def categorize_middleware(name)

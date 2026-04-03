@@ -249,8 +249,12 @@ module RailsAiContext
         columns = result.columns
         rows = result.rows
 
+        # Match both real column names and aliases that end with sensitive suffixes
+        sensitive_suffixes = %w[password secret token key digest hash].freeze
         redacted_indices = columns.each_with_index.filter_map { |col, i|
-          i if redacted_cols.include?(col.downcase)
+          col_down = col.downcase
+          i if redacted_cols.include?(col_down) ||
+               sensitive_suffixes.any? { |suffix| col_down.end_with?(suffix) || col_down.include?("password") || col_down.include?("secret") || col_down.include?("token") }
         }
 
         return result if redacted_indices.empty?

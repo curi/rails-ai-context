@@ -14,6 +14,7 @@ module RailsAiContext
         {
           turbo_frames: extract_turbo_frames,
           turbo_streams: extract_turbo_stream_templates,
+          stream_actions: extract_stream_actions,
           model_broadcasts: extract_model_broadcasts,
           morph_meta: detect_morph_meta,
           permanent_elements: extract_permanent_elements,
@@ -43,8 +44,12 @@ module RailsAiContext
           content = File.read(path)
           relative = path.sub("#{views_dir}/", "")
 
-          content.scan(/turbo_frame_tag\s+[:"']?(\w+)/).each do |match|
-            frames << { id: match[0], file: relative }
+          content.each_line do |line|
+            next unless (match = line.match(/turbo_frame_tag\s+[:"']?(\w+)/))
+            entry = { id: match[1], file: relative }
+            src_match = line.match(/src:\s*["']?([^"',\s)]+)/)
+            entry[:src] = src_match[1] if src_match
+            frames << entry
           end
         end
 
@@ -60,6 +65,21 @@ module RailsAiContext
         Dir.glob(File.join(views_dir, "**/*.turbo_stream.erb")).filter_map do |path|
           path.sub("#{views_dir}/", "")
         end.sort
+      end
+
+      def extract_stream_actions
+        actions = Hash.new(0)
+        return actions unless Dir.exist?(views_dir)
+
+        Dir.glob(File.join(views_dir, "**", "*.turbo_stream.erb")).each do |path|
+          content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+          content.scan(/turbo_stream\.(\w+)/).each { |action| actions[action[0]] += 1 }
+          content.scan(/<turbo-stream\s+action=["'](\w+)["']/).each { |action| actions[action[0]] += 1 }
+        end
+        actions
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_stream_actions failed: #{e.message}" if ENV["DEBUG"]
+        {}
       end
 
       def extract_model_broadcasts

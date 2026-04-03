@@ -189,7 +189,9 @@ module RailsAiContext
         missing = []
 
         schema_data.each do |table_name, table|
-          table[:columns].each do |col|
+          columns = table[:columns]
+
+          columns.each do |col|
             next unless col[:name].end_with?("_id")
 
             indexed = table[:indexes].any? { |idx| idx.include?(col[:name]) }
@@ -197,11 +199,31 @@ module RailsAiContext
             next if col[:type] == "references"
             next if indexed
 
-            missing << {
-              table: table_name,
-              column: col[:name],
-              suggestion: "add_index :#{table_name}, :#{col[:name]}"
-            }
+            # Check for polymorphic association (_type column alongside _id)
+            base_name = col[:name].sub(/_id\z/, "")
+            type_col = columns.find { |c| c[:name] == "#{base_name}_type" }
+
+            if type_col
+              # Polymorphic: need compound index on [type, id]
+              compound_indexed = table[:indexes].any? { |idx|
+                idx_str = idx.to_s
+                idx_str.include?("#{base_name}_type") && idx_str.include?("#{base_name}_id")
+              }
+              unless compound_indexed
+                missing << {
+                  table: table_name,
+                  column: "#{base_name}_type, #{base_name}_id",
+                  polymorphic: true,
+                  suggestion: "add_index :#{table_name}, [:#{base_name}_type, :#{base_name}_id]"
+                }
+              end
+            else
+              missing << {
+                table: table_name,
+                column: col[:name],
+                suggestion: "add_index :#{table_name}, :#{col[:name]}"
+              }
+            end
           end
         end
 

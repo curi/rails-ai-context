@@ -50,11 +50,21 @@ module RailsAiContext
 
           if (t_match = line.match(/^\s*task\s+:(\w+)/))
             name = (current_namespace + [ t_match[1] ]).join(":")
-            tasks << {
+            entry = {
               name: name,
               description: last_desc,
               file: relative
-            }.compact
+            }
+            # Extract task dependencies (=> [:dep1, :dep2] or => :dep)
+            if (dep_match = line.match(/=>\s*(?:\[([^\]]+)\]|:(\w+))/))
+              deps = dep_match[1] ? dep_match[1].scan(/:(\w+)/).flatten : [ dep_match[2] ]
+              entry[:dependencies] = deps if deps.any?
+            end
+            # Extract task arguments (task :name, [:arg1, :arg2])
+            if (args_match = line.match(/task\s+:#{Regexp.escape(t_match[1])}\s*,\s*\[([^\]]+)\]/))
+              entry[:args] = args_match[1].scan(/:(\w+)/).flatten
+            end
+            tasks << entry.compact
             last_desc = nil
           end
         end

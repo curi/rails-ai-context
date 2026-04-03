@@ -67,7 +67,28 @@ module RailsAiContext
         return nil unless File.exist?(database_yml)
 
         content = File.read(database_yml)
-        { detected: true, note: "Sharding configuration found in database.yml" } if content.match?(/shard/i)
+        return nil unless content.match?(/shard/i)
+
+        result = { detected: true }
+        # Extract shard names from database.yml
+        shard_names = content.scan(/^\s{4,}(\w*shard\w*):/).flatten.uniq
+        result[:shard_names] = shard_names if shard_names.any?
+
+        # Extract shard config from model source (connects_to shards: { ... })
+        models_dir = File.join(root, "app/models")
+        if Dir.exist?(models_dir)
+          Dir.glob(File.join(models_dir, "**/*.rb")).each do |path|
+            src = File.read(path) rescue next
+            if (match = src.match(/connects_to\s+.*shards:\s*\{([^}]+)\}/m))
+              shard_keys = match[1].scan(/(\w+):/).flatten
+              result[:shard_keys] = shard_keys if shard_keys.any?
+              result[:shard_count] = shard_keys.size
+              break
+            end
+          end
+        end
+
+        result
       rescue => e
         $stderr.puts "[rails-ai-context] detect_sharding failed: #{e.message}" if ENV["DEBUG"]
         nil
@@ -109,10 +130,11 @@ module RailsAiContext
         databases = []
         current_env = defined?(Rails) ? Rails.env : "development"
         in_env = false
-        skip_keys = %w[adapter database host port username password encoding pool timeout socket url]
+        skip_keys = %w[adapter database host port username password encoding pool timeout socket url replica]
+        current_db = nil
 
         content.each_line do |line|
-          if line.match?(/\A#{current_env}:/)
+          if line.match?(/\A#{Regexp.escape(current_env)}:/)
             in_env = true
             next
           elsif line.match?(/\A\w+:/) && in_env
@@ -121,9 +143,26 @@ module RailsAiContext
 
           next unless in_env
 
-          if line.match?(/\A\s{2}(\w+):/) && !line.include?("<<")
-            db_name = line.strip.chomp(":")
-            databases << { name: db_name } unless skip_keys.include?(db_name)
+          # 2-space indent = database name (primary, cache, etc.) or flat config key
+          if (match = line.match(/\A\s{2}(\w+):\s*(.*)/)) && !line.include?("<<")
+            key = match[1]
+            value = match[2].strip
+            if skip_keys.include?(key)
+              # Flat config (single-db): extract adapter/database inline
+              if key == "adapter" && databases.empty?
+                databases << { name: "primary", adapter: value }
+              end
+            else
+              # This is a named database (multi-db config)
+              current_db = { name: key }
+              databases << current_db
+            end
+          # 4-space indent = settings under a named database
+          elsif current_db && (match = line.match(/\A\s{4}(\w+):\s*(.*)/))
+            key = match[1]
+            value = match[2].strip
+            current_db[:adapter] = value if key == "adapter"
+            current_db[:replica] = true if key == "replica" && value == "true"
           end
         end
 

@@ -26,7 +26,9 @@ module RailsAiContext
           ci_config: detect_ci,
           coverage: detect_coverage,
           factory_traits: detect_factory_traits,
-          test_count_by_category: detect_test_count_by_category
+          test_count_by_category: detect_test_count_by_category,
+          shared_examples: detect_shared_examples,
+          database_cleaner: detect_database_cleaner
         }
       rescue => e
         { error: e.message }
@@ -223,6 +225,45 @@ module RailsAiContext
         nil
       rescue => e
         $stderr.puts "[rails-ai-context] detect_factory_traits failed: #{e.message}" if ENV["DEBUG"]
+        nil
+      end
+
+      def detect_shared_examples
+        shared = []
+        %w[spec test].each do |base|
+          support_dir = File.join(root, base, "support")
+          next unless Dir.exist?(support_dir)
+          Dir.glob(File.join(support_dir, "**/*.rb")).each do |path|
+            content = File.read(path) rescue next
+            content.scan(/(?:shared_examples|shared_context|shared_examples_for)\s+["']([^"']+)["']/).each do |m|
+              shared << { name: m[0], file: path.sub("#{root}/", "") }
+            end
+          end
+        end
+        shared.sort_by { |s| s[:name] }
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_shared_examples failed: #{e.message}" if ENV["DEBUG"]
+        []
+      end
+
+      def detect_database_cleaner
+        gemfile_lock = File.join(root, "Gemfile.lock")
+        return nil unless File.exist?(gemfile_lock)
+        content = File.read(gemfile_lock)
+        if content.include?("database_cleaner")
+          strategy = nil
+          %w[spec/rails_helper.rb spec/spec_helper.rb test/test_helper.rb].each do |helper|
+            path = File.join(root, helper)
+            next unless File.exist?(path)
+            helper_content = File.read(path)
+            if (match = helper_content.match(/DatabaseCleaner\.strategy\s*=\s*:(\w+)/))
+              strategy = match[1]
+            end
+          end
+          { detected: true, strategy: strategy }.compact
+        end
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_database_cleaner failed: #{e.message}" if ENV["DEBUG"]
         nil
       end
 

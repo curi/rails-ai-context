@@ -19,6 +19,17 @@ module RailsAiContext
           parse_controller(path, controllers_dir)
         end
 
+        # Merge action bindings from views into each controller's data
+        bindings = extract_action_bindings
+        if bindings.any?
+          controllers.each do |ctrl|
+            next unless ctrl[:name]
+            if (ctrl_bindings = bindings[ctrl[:name]])
+              ctrl[:action_bindings] = ctrl_bindings
+            end
+          end
+        end
+
         {
           controllers: controllers,
           cross_controller_composition: extract_cross_controller_composition(root)
@@ -34,18 +45,22 @@ module RailsAiContext
         name = relative.sub(/_controller\.(js|ts)\z/, "").tr("/", "--")
         content = File.read(path)
 
+        outlets = extract_outlets(content)
+
         {
           name: name,
           file: relative,
           targets: extract_targets(content),
           values: extract_values(content),
           actions: extract_actions(content),
-          outlets: extract_outlets(content),
+          outlets: outlets,
+          outlet_controllers: outlets.any? ? outlets.each_with_object({}) { |o, h| h[o] = "#{o}-controller" } : nil,
           classes: extract_classes(content),
+          lifecycle: extract_lifecycle(content),
           import_graph: extract_import_graph(content),
           complexity: extract_complexity(content),
           turbo_event_listeners: extract_turbo_event_listeners(content)
-        }
+        }.compact
       rescue => e
         { name: File.basename(path), error: e.message }
       end
@@ -150,6 +165,40 @@ module RailsAiContext
       rescue => e
         $stderr.puts "[rails-ai-context] extract_turbo_event_listeners failed: #{e.message}" if ENV["DEBUG"]
         []
+      end
+
+      def extract_lifecycle(content)
+        hooks = content.scan(/\b(connect|disconnect|initialize)\s*\(\s*\)/).flatten.uniq
+        hooks.any? ? hooks : nil
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_lifecycle failed: #{e.message}" if ENV["DEBUG"]
+        nil
+      end
+
+      def extract_action_bindings
+        bindings = Hash.new { |h, k| h[k] = [] }
+        view_dirs = [ File.join(app.root, "app", "views"), File.join(app.root, "app", "components") ]
+        view_dirs.each do |dir|
+          next unless Dir.exist?(dir)
+          Dir.glob(File.join(dir, "**", "*.{erb,haml,slim}")).each do |path|
+            content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+            content.scan(/data-action=["']([^"']+)["']/).each do |match|
+              match[0].split(/\s+/).each do |binding_str|
+                # Format: event->controller#method
+                if (m = binding_str.match(/(?:(\w+)->)?(\w[\w-]*)#(\w+)/))
+                  controller = m[2]
+                  method = m[3]
+                  event = m[1]
+                  bindings[controller] << { event: event, method: method }.compact
+                end
+              end
+            end
+          end
+        end
+        bindings.transform_values(&:uniq)
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_action_bindings failed: #{e.message}" if ENV["DEBUG"]
+        {}
       end
 
       def extract_cross_controller_composition(root)

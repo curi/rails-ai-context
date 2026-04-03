@@ -105,9 +105,10 @@ module RailsAiContext
 
     def start_stdio(server)
       transport = MCP::Server::Transports::StdioTransport.new(server)
+      tools = active_tools(RailsAiContext.configuration)
       # Log to stderr so we don't pollute the JSON-RPC channel on stdout
       $stderr.puts "[rails-ai-context] MCP server started (stdio transport)"
-      $stderr.puts "[rails-ai-context] Tools: #{TOOLS.map { |t| t.tool_name }.join(', ')}"
+      $stderr.puts "[rails-ai-context] Tools (#{tools.size}): #{tools.map { |t| t.tool_name }.join(', ')}"
       maybe_start_live_reload(server)
       transport.open
     end
@@ -119,13 +120,15 @@ module RailsAiContext
       # Build a minimal Rack app that delegates to the MCP transport
       rack_app = build_rack_app(transport, config.http_path)
 
-      unless config.http_bind == "127.0.0.1" || config.http_bind == "::1" || config.http_bind == "localhost"
+      loopback = %w[127.0.0.1 ::1 localhost].freeze
+      unless loopback.include?(config.http_bind)
         $stderr.puts "[rails-ai-context] WARNING: MCP HTTP transport binding to #{config.http_bind} — " \
                      "this exposes all tools to the network without authentication. " \
                      "Use 127.0.0.1 (default) unless you have external auth in place."
       end
+      tools = active_tools(config)
       $stderr.puts "[rails-ai-context] MCP server starting on #{config.http_bind}:#{config.http_port}#{config.http_path}"
-      $stderr.puts "[rails-ai-context] Tools: #{TOOLS.map { |t| t.tool_name }.join(', ')}"
+      $stderr.puts "[rails-ai-context] Tools (#{tools.size}): #{tools.map { |t| t.tool_name }.join(', ')}"
       maybe_start_live_reload(server)
 
       begin

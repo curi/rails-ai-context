@@ -58,6 +58,11 @@ module RailsAiContext
         %w[dry-validation dry-types dry-struct dry-monads].each do |gem|
           arch << "dry_rb" if gem_present?(gem)
         end
+        arch << "multi_tenant" if gem_present?("apartment") || gem_present?("acts_as_tenant") || gem_present?("ros-apartment")
+        arch << "feature_flags" if gem_present?("flipper") || gem_present?("launchdarkly-server-sdk") || gem_present?("split") || gem_present?("unleash")
+        arch << "error_monitoring" if gem_present?("sentry-ruby") || gem_present?("bugsnag") || gem_present?("honeybadger") || gem_present?("rollbar") || gem_present?("airbrake")
+        arch << "event_driven" if gem_present?("ruby-kafka") || gem_present?("karafka") || gem_present?("bunny") || gem_present?("sneakers") || gem_present?("aws-sdk-sns") || gem_present?("aws-sdk-sqs")
+        arch << "zeitwerk" if defined?(Zeitwerk) && defined?(Rails) && Rails.autoloaders.respond_to?(:main)
         arch.uniq
       end
 
@@ -70,7 +75,24 @@ module RailsAiContext
           model_files = Dir.glob(File.join(model_dir, "**/*.rb"))
           content = model_files.first(500).map { |f| File.read(f) rescue "" }.join("\n")
 
-          patterns << "sti" if content.match?(/self\.inheritance_column|type.*string/)
+          # STI: explicit inheritance_column, or a model that inherits from another app model
+          # with a `type` column (verified via schema.rb or model source)
+          app_model_names = model_files.filter_map { |f| File.basename(f, ".rb").camelize }
+          schema_content = begin
+            schema_path = File.join(root, "db/schema.rb")
+            File.exist?(schema_path) ? File.read(schema_path) : ""
+          rescue
+            ""
+          end
+          has_sti_subclass = model_files.any? do |f|
+            src = File.read(f) rescue ""
+            parent_match = src.match(/class\s+\w+\s*<\s*(\w+)/)
+            next false unless parent_match && app_model_names.include?(parent_match[1]) && parent_match[1] != "ApplicationRecord"
+            # Verify parent's table has a `type` column
+            parent_table = parent_match[1].underscore.pluralize
+            schema_content.match?(/create_table\s+"#{Regexp.escape(parent_table)}".*?t\.\w+\s+"type"/m)
+          end
+          patterns << "sti" if content.match?(/self\.inheritance_column/) || has_sti_subclass
           patterns << "polymorphic" if content.match?(/polymorphic:\s*true/)
           patterns << "soft_delete" if content.match?(/acts_as_paranoid|discard|deleted_at/)
           patterns << "versioning" if content.match?(/has_paper_trail|audited/)

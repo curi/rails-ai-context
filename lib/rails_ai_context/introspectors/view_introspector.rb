@@ -21,7 +21,8 @@ module RailsAiContext
           template_engines: detect_template_engines,
           form_builders_detected: detect_form_builders,
           component_usage: detect_component_usage,
-          layout_mapping: extract_layout_mapping
+          layout_mapping: extract_layout_mapping,
+          conditional_layouts: detect_conditional_layouts
         }
       rescue => e
         { error: e.message }
@@ -42,8 +43,16 @@ module RailsAiContext
         return [] unless Dir.exist?(dir)
 
         Dir.glob(File.join(dir, "*")).filter_map do |path|
-          File.basename(path) if File.file?(path)
-        end.sort
+          next unless File.file?(path)
+          content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+          yields = content.scan(/<%=?\s*(?:yield|content_for)\s*[:(]?\s*:?(\w*)/).flatten.reject(&:empty?)
+          entry = { name: File.basename(path) }
+          entry[:yields] = yields unless yields.empty?
+          entry
+        rescue => e
+          $stderr.puts "[rails-ai-context] extract_layouts read failed: #{e.message}" if ENV["DEBUG"]
+          { name: File.basename(path) }
+        end.sort_by { |l| l[:name] }
       end
 
       def extract_templates
@@ -188,6 +197,32 @@ module RailsAiContext
         end.uniq.sort
       rescue => e
         $stderr.puts "[rails-ai-context] extract_layout_mapping failed: #{e.message}" if ENV["DEBUG"]
+        []
+      end
+
+      def detect_conditional_layouts
+        layouts = []
+        controllers_dir = File.join(app.root, "app", "controllers")
+        return layouts unless Dir.exist?(controllers_dir)
+
+        Dir.glob(File.join(controllers_dir, "**", "*.rb")).each do |path|
+          content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+          content.each_line do |line|
+            if (match = line.match(/\A\s*layout\s+["':]*(\w+)["']?(.*)$/))
+              entry = { layout: match[1], controller: File.basename(path, ".rb").camelize }
+              conditions = match[2].strip
+              entry[:only] = conditions.scan(/only:\s*\[?([^\]]+)\]?/).flatten.first&.scan(/:(\w+)/)&.flatten if conditions.include?("only:")
+              entry[:except] = conditions.scan(/except:\s*\[?([^\]]+)\]?/).flatten.first&.scan(/:(\w+)/)&.flatten if conditions.include?("except:")
+              entry[:condition] = conditions.strip unless conditions.empty?
+              layouts << entry
+            end
+          end
+        rescue => e
+          $stderr.puts "[rails-ai-context] detect_conditional_layouts failed: #{e.message}" if ENV["DEBUG"]
+        end
+        layouts
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_conditional_layouts failed: #{e.message}" if ENV["DEBUG"]
         []
       end
     end

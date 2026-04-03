@@ -118,9 +118,11 @@ module RailsAiContext
         %w[
           create_table drop_table rename_table
           add_column remove_column rename_column change_column
+          change_column_default change_column_null
           add_index remove_index add_reference remove_reference
           add_foreign_key remove_foreign_key
           add_timestamps create_join_table enable_extension execute
+          add_check_constraint remove_check_constraint
         ].select { |action| content.include?(action) }
       end
     end

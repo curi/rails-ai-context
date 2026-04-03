@@ -86,7 +86,8 @@ module RailsAiContext
       def extract_details_from_source(path)
         source = File.read(path)
         parent = source.match(/class\s+\S+\s*<\s*(\S+)/)&.send(:[], 1) || "Unknown"
-        {
+        rate_limit_raw = extract_rate_limit(source)
+        details = {
           parent_class: parent,
           api_controller: parent.include?("API"),
           actions: extract_actions_from_source(source),
@@ -95,15 +96,18 @@ module RailsAiContext
           strong_params: extract_strong_params(source),
           respond_to_formats: extract_respond_to(source),
           rescue_from: extract_rescue_from(source),
-          rate_limit: extract_rate_limit(source),
+          rate_limit: rate_limit_raw,
+          rate_limit_parsed: parse_rate_limit(rate_limit_raw),
           turbo_stream_actions: extract_turbo_stream_actions(source)
         }.compact
+        details
       rescue => e
         { error: e.message }
       end
 
       def extract_controller_details(ctrl)
         source = read_source(ctrl)
+        rate_limit_raw = extract_rate_limit(source)
 
         {
           parent_class: ctrl.superclass.name,
@@ -114,7 +118,8 @@ module RailsAiContext
           strong_params: extract_strong_params(source),
           respond_to_formats: extract_respond_to(source),
           rescue_from: extract_rescue_from(source),
-          rate_limit: extract_rate_limit(source),
+          rate_limit: rate_limit_raw,
+          rate_limit_parsed: parse_rate_limit(rate_limit_raw),
           turbo_stream_actions: extract_turbo_stream_actions(source)
         }.compact
       end
@@ -149,6 +154,9 @@ module RailsAiContext
           end
 
           next if in_private
+
+          # Skip inline private/protected method definitions (e.g. `private def foo`)
+          next if line.match?(/\A\s*(?:private|protected)\s+def\s/)
 
           if (match = line.match(/\A\s*def\s+(\w+[?!]?)/))
             actions << match[1] unless match[1].start_with?("_")
@@ -358,6 +366,20 @@ module RailsAiContext
         match[1].strip
       rescue => e
         $stderr.puts "[rails-ai-context] extract_rate_limit failed: #{e.message}" if ENV["DEBUG"]
+        nil
+      end
+
+      def parse_rate_limit(rate_limit_raw)
+        return nil if rate_limit_raw.nil?
+
+        parsed = {}
+        parsed[:to] = $1.to_i if rate_limit_raw.match(/to:\s*(\d+)/)
+        parsed[:within] = $1 if rate_limit_raw.match(/within:\s*(\S+)/)
+        parsed[:only] = $1.scan(/:(\w+)/).flatten if rate_limit_raw.match(/only:\s*(.+?)(?:,\s*\w+:|$)/)
+
+        parsed.empty? ? nil : parsed
+      rescue => e
+        $stderr.puts "[rails-ai-context] parse_rate_limit failed: #{e.message}" if ENV["DEBUG"]
         nil
       end
 

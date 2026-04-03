@@ -16,7 +16,9 @@ module RailsAiContext
           installed: defined?(ActiveStorage) ? true : false,
           attachments: extract_attachments,
           storage_services: extract_storage_services,
-          direct_upload: detect_direct_upload
+          direct_upload: detect_direct_upload,
+          validations: extract_attachment_validations,
+          variants: extract_variants
         }
       rescue => e
         { error: e.message }
@@ -61,6 +63,47 @@ module RailsAiContext
         config.keys.sort
       rescue => e
         $stderr.puts "[rails-ai-context] extract_storage_services failed: #{e.message}" if ENV["DEBUG"]
+        []
+      end
+
+      def extract_attachment_validations
+        validations = []
+        models_dir = File.join(app.root, "app", "models")
+        return validations unless Dir.exist?(models_dir)
+
+        Dir.glob(File.join(models_dir, "**", "*.rb")).each do |path|
+          content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+          model = File.basename(path, ".rb").camelize
+          content.each_line do |line|
+            if (match = line.match(/validates?\s+:(\w+),.*content_type:/))
+              validations << { model: model, attachment: match[1], type: "content_type" }
+            end
+            if (match = line.match(/validates?\s+:(\w+),.*size:/))
+              validations << { model: model, attachment: match[1], type: "size" }
+            end
+          end
+        end
+        validations
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_attachment_validations failed: #{e.message}" if ENV["DEBUG"]
+        []
+      end
+
+      def extract_variants
+        variants = []
+        models_dir = File.join(app.root, "app", "models")
+        return variants unless Dir.exist?(models_dir)
+
+        Dir.glob(File.join(models_dir, "**", "*.rb")).each do |path|
+          content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+          model = File.basename(path, ".rb").camelize
+          content.scan(/\.variant\s*\(\s*:(\w+)/).each do |name|
+            variants << { model: model, name: name[0] }
+          end
+        end
+        variants
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_variants failed: #{e.message}" if ENV["DEBUG"]
         []
       end
 

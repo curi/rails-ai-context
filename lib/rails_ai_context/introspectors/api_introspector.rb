@@ -20,7 +20,9 @@ module RailsAiContext
           rate_limiting: detect_rate_limiting,
           openapi_spec: detect_openapi_specs,
           cors_config: detect_cors_config,
-          api_client_generation: detect_api_client_generation
+          api_client_generation: detect_api_client_generation,
+          graphql_details: extract_graphql_details,
+          pagination: detect_pagination
         }
       rescue => e
         { error: e.message }
@@ -116,6 +118,36 @@ module RailsAiContext
       rescue => e
         $stderr.puts "[rails-ai-context] detect_api_client_generation failed: #{e.message}" if ENV["DEBUG"]
         []
+      end
+
+      def extract_graphql_details
+        graphql_dir = File.join(app.root, "app", "graphql")
+        return nil unless Dir.exist?(graphql_dir)
+
+        details = {}
+        details[:resolvers] = Dir.glob(File.join(graphql_dir, "**", "*resolver*")).map { |f| File.basename(f, ".rb").camelize }
+        details[:subscriptions] = Dir.glob(File.join(graphql_dir, "**", "subscriptions", "*.rb")).map { |f| File.basename(f, ".rb").camelize }
+        details[:dataloaders] = Dir.glob(File.join(graphql_dir, "**", "{loaders,dataloaders}", "*.rb")).map { |f| File.basename(f, ".rb").camelize }
+        details.reject { |_, v| v.empty? }
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_graphql_details failed: #{e.message}" if ENV["DEBUG"]
+        nil
+      end
+
+      def detect_pagination
+        gemfile_lock = File.join(app.root, "Gemfile.lock")
+        return nil unless File.exist?(gemfile_lock)
+        content = File.read(gemfile_lock)
+
+        strategies = []
+        strategies << "pagy" if content.include?("pagy")
+        strategies << "kaminari" if content.include?("kaminari")
+        strategies << "will_paginate" if content.include?("will_paginate")
+        strategies << "cursor" if content.include?("graphql-pro") # cursor-based pagination
+        strategies.empty? ? nil : strategies
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_pagination failed: #{e.message}" if ENV["DEBUG"]
+        nil
       end
 
       def detect_rate_limiting

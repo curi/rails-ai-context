@@ -42,7 +42,8 @@ module RailsAiContext
           categorized: categorize_tokens(tokens),
           font_loading: extract_font_loading(root),
           css_layers: extract_css_layers(root),
-          postcss_plugins: extract_postcss_plugins(root)
+          postcss_plugins: extract_postcss_plugins(root),
+          arbitrary_values: extract_arbitrary_values
         }
       rescue => e
         { error: e.message }
@@ -331,6 +332,23 @@ module RailsAiContext
       rescue => e
         $stderr.puts "[rails-ai-context] extract_postcss_plugins failed: #{e.message}" if ENV["DEBUG"]
         []
+      end
+
+      def extract_arbitrary_values
+        values = Hash.new(0)
+        views_dir = File.join(app.root.to_s, "app", "views")
+        return values unless Dir.exist?(views_dir)
+
+        Dir.glob(File.join(views_dir, "**", "*.{erb,haml,slim}")).first(100).each do |path|
+          content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+          content.scan(/\b(\w+)-\[([^\]]+)\]/).each do |prefix, _value|
+            values["#{prefix}-[...]"] += 1
+          end
+        end
+        values.sort_by { |_, count| -count }.first(20).to_h
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_arbitrary_values failed: #{e.message}" if ENV["DEBUG"]
+        {}
       end
 
       # Helper: extract :root { --var: value } from CSS content

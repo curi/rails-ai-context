@@ -42,8 +42,10 @@ module RailsAiContext
           uses_insert_all: content.match?(/\.insert_all/),
           uses_faker: content.match?(/Faker::/),
           uses_factory_bot: content.match?(/FactoryBot/),
+          uses_csv: content.match?(/CSV\.|require.*csv/i),
           loads_directory: content.match?(/Dir\[|Dir\.glob|load.*seeds/),
-          environment_conditional: content.match?(/Rails\.env/)
+          environment_conditional: content.match?(/Rails\.env/),
+          has_ordering: content.match?(/load.*order|require.*order|seeds.*\d+/i)
         }
       rescue => e
         { exists: false, error: e.message }

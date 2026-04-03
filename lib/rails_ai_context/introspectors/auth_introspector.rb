@@ -45,6 +45,14 @@ module RailsAiContext
         secure_pw = scan_models_for(/has_secure_password/)
         auth[:has_secure_password] = secure_pw.map { |m| m[:model] } if secure_pw.any?
 
+        # OmniAuth providers
+        omniauth = detect_omniauth_providers
+        auth[:omniauth_providers] = omniauth if omniauth.any?
+
+        # Devise settings (timeout, lockout, etc.)
+        devise_settings = extract_devise_settings
+        auth[:devise_settings] = devise_settings unless devise_settings.empty?
+
         auth
       end
 
@@ -171,6 +179,46 @@ module RailsAiContext
       rescue => e
         $stderr.puts "[rails-ai-context] detect_http_token_auth failed: #{e.message}" if ENV["DEBUG"]
         []
+      end
+
+      def detect_omniauth_providers
+        providers = []
+        initializers = Dir.glob(File.join(app.root, "config", "initializers", "*.rb"))
+        initializers.each do |path|
+          content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+          content.scan(/config\.omniauth\s+:(\w+)/).each { |m| providers << m[0] }
+          content.scan(/provider\s+:(\w+)/).each { |m| providers << m[0] unless %w[developer].include?(m[0]) }
+        end
+        # Also check model files for omniauth_providers
+        models_dir = File.join(app.root, "app", "models")
+        if Dir.exist?(models_dir)
+          Dir.glob(File.join(models_dir, "**", "*.rb")).each do |path|
+            content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace)
+            content.scan(/omniauth_providers:\s*\[([^\]]+)\]/).each do |m|
+              m[0].scan(/:(\w+)/).each { |p| providers << p[0] }
+            end
+          end
+        end
+        providers.uniq
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_omniauth_providers failed: #{e.message}" if ENV["DEBUG"]
+        []
+      end
+
+      def extract_devise_settings
+        path = File.join(app.root, "config", "initializers", "devise.rb")
+        return {} unless File.exist?(path)
+        content = File.read(path)
+        settings = {}
+        settings[:timeout_in] = $1 if content.match(/config\.timeout_in\s*=\s*(\S+)/)
+        settings[:lock_strategy] = $1 if content.match(/config\.lock_strategy\s*=\s*:(\w+)/)
+        settings[:maximum_attempts] = $1.to_i if content.match(/config\.maximum_attempts\s*=\s*(\d+)/)
+        settings[:unlock_strategy] = $1 if content.match(/config\.unlock_strategy\s*=\s*:(\w+)/)
+        settings[:password_length] = $1 if content.match(/config\.password_length\s*=\s*(\S+)/)
+        settings.empty? ? {} : settings
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_devise_settings failed: #{e.message}" if ENV["DEBUG"]
+        {}
       end
 
       def scan_models_for(pattern)

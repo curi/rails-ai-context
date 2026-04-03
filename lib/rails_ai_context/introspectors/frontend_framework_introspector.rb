@@ -106,6 +106,8 @@ module RailsAiContext
           typescript: ts,
           monorepo: mono,
           build_tool: build,
+          api_clients: detect_api_clients(all_deps),
+          component_libraries: detect_component_libraries(all_deps),
           summary: build_summary(frameworks, mounting, build, ts, total_components)
         }
       rescue => e
@@ -411,6 +413,38 @@ module RailsAiContext
         real.start_with?(root)
       rescue Errno::ENOENT, Errno::EACCES
         false
+      end
+
+      API_CLIENT_MARKERS = {
+        "axios" => "Axios", "ky" => "Ky", "got" => "Got",
+        "@tanstack/react-query" => "TanStack Query", "swr" => "SWR",
+        "apollo-client" => "Apollo Client", "@apollo/client" => "Apollo Client",
+        "urql" => "URQL", "graphql-request" => "graphql-request",
+        "relay-runtime" => "Relay"
+      }.freeze
+
+      COMPONENT_LIB_MARKERS = {
+        "@mui/material" => "MUI", "@chakra-ui/react" => "Chakra UI",
+        "@radix-ui/react-dialog" => "Radix UI", "@headlessui/react" => "Headless UI",
+        "antd" => "Ant Design", "@mantine/core" => "Mantine",
+        "shadcn-ui" => "shadcn/ui", "@shadcn/ui" => "shadcn/ui",
+        "daisyui" => "DaisyUI", "flowbite" => "Flowbite",
+        "primereact" => "PrimeReact", "vuetify" => "Vuetify",
+        "element-plus" => "Element Plus", "naive-ui" => "Naive UI"
+      }.freeze
+
+      def detect_api_clients(all_deps)
+        API_CLIENT_MARKERS.filter_map { |pkg, label| label if all_deps.key?(pkg) }.uniq
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_api_clients failed: #{e.message}" if ENV["DEBUG"]
+        []
+      end
+
+      def detect_component_libraries(all_deps)
+        COMPONENT_LIB_MARKERS.filter_map { |pkg, label| label if all_deps.key?(pkg) }.uniq
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_component_libraries failed: #{e.message}" if ENV["DEBUG"]
+        []
       end
 
       def package_json_has_script?(name)

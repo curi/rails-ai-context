@@ -94,7 +94,7 @@ module RailsAiContext
         info[:base_images] = from_lines.flatten if from_lines.any?
         info[:multi_stage] = from_lines.size > 1
 
-        compose = File.exist?(File.join(root, "docker-compose.yml"))
+        compose = File.exist?(File.join(root, "docker-compose.yml")) || File.exist?(File.join(root, "docker-compose.yaml"))
         info[:compose] = compose
 
         info
@@ -104,10 +104,14 @@ module RailsAiContext
       end
 
       def detect_deployment_tool
-        return "kamal" if File.exist?(File.join(root, "config/deploy.yml"))
-        return "capistrano" if File.exist?(File.join(root, "Capfile"))
-        return "heroku" if File.exist?(File.join(root, "app.json")) || File.exist?(File.join(root, "Procfile"))
-        nil
+        tools = []
+        tools << "kamal" if File.exist?(File.join(root, "config/deploy.yml"))
+        tools << "capistrano" if File.exist?(File.join(root, "Capfile"))
+        tools << "heroku" if File.exist?(File.join(root, "app.json"))
+        tools << "fly.io" if File.exist?(File.join(root, "fly.toml"))
+        tools << "render" if File.exist?(File.join(root, "render.yaml")) || File.exist?(File.join(root, "render.yml"))
+        tools << "railway" if File.exist?(File.join(root, "railway.toml")) || File.exist?(File.join(root, "railway.json"))
+        tools.first # Return primary detected tool for backward compatibility
       end
     end
   end

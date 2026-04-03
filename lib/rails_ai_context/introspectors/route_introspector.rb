@@ -14,12 +14,14 @@ module RailsAiContext
       # @return [Hash] routes grouped by controller
       def call
         routes = extract_routes
+        root = routes.find { |r| r[:path] == "/" && r[:verb]&.include?("GET") }
 
         {
           total_routes: routes.size,
           by_controller: group_by_controller(routes),
           api_namespaces: detect_api_namespaces(routes),
-          mounted_engines: detect_mounted_engines
+          mounted_engines: detect_mounted_engines,
+          root_route: root ? "#{root[:controller]}##{root[:action]}" : nil
         }
       end
 
@@ -33,14 +35,24 @@ module RailsAiContext
           next if route.respond_to?(:internal?) && route.internal?
           next if route.defaults[:controller].blank?
 
-          {
+          route_path = route.path.spec.to_s.gsub("(.:format)", "")
+          action = route.defaults[:action]
+
+          entry = {
             verb: route.verb.presence || "ANY",
-            path: route.path.spec.to_s.gsub("(.:format)", ""),
+            path: route_path,
             controller: route.defaults[:controller],
-            action: route.defaults[:action],
+            action: action,
             name: route.name,
             constraints: extract_constraints(route)
-          }.compact
+          }
+
+          params = route_path.scan(/:(\w+)/).flatten
+          entry[:params] = params if params.any?
+
+          entry[:restful] = %w[index show new create edit update destroy].include?(action)
+
+          entry.compact
         end
       end
 
@@ -55,7 +67,10 @@ module RailsAiContext
       def group_by_controller(routes)
         routes.group_by { |r| r[:controller] }.transform_values do |controller_routes|
           controller_routes.map do |r|
-            { verb: r[:verb], path: r[:path], action: r[:action], name: r[:name] }.compact
+            entry = { verb: r[:verb], path: r[:path], action: r[:action], name: r[:name] }
+            entry[:params] = r[:params] if r[:params]
+            entry[:restful] = r[:restful] unless r[:restful].nil?
+            entry.compact
           end
         end
       end

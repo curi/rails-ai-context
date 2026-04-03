@@ -161,11 +161,57 @@ module RailsAiContext
           total_gems: specs.size,
           ruby_version: specs["ruby"]&.first,
           notable_gems: detect_notable_gems(specs),
-          categories: categorize_gems(specs)
+          categories: categorize_gems(specs),
+          local_gems: detect_local_gems,
+          gem_groups: detect_gem_groups
         }
       end
 
       private
+
+      def detect_local_gems
+        gemfile = File.join(app.root, "Gemfile")
+        return [] unless File.exist?(gemfile)
+
+        content = File.read(gemfile)
+        local = []
+        content.each_line do |line|
+          next if line.strip.start_with?("#")
+          if (match = line.match(/gem\s+["'](\w[\w-]*)["'].*path:\s*["']([^"']+)["']/))
+            local << { name: match[1], source: "path", location: match[2] }
+          elsif (match = line.match(/gem\s+["'](\w[\w-]*)["'].*git:\s*["']([^"']+)["']/))
+            local << { name: match[1], source: "git", location: match[2] }
+          end
+        end
+        local
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_local_gems failed: #{e.message}" if ENV["DEBUG"]
+        []
+      end
+
+      def detect_gem_groups
+        gemfile = File.join(app.root, "Gemfile")
+        return {} unless File.exist?(gemfile)
+
+        content = File.read(gemfile)
+        groups = {}
+        current_group = nil
+        content.each_line do |line|
+          stripped = line.strip
+          next if stripped.start_with?("#")
+          if (match = stripped.match(/\Agroup\s+(.+?)\s+do\b/))
+            current_group = match[1].scan(/:(\w+)/).flatten
+          elsif stripped == "end" && current_group
+            current_group = nil
+          elsif current_group && (match = stripped.match(/\Agem\s+["'](\w[\w-]*)["']/))
+            current_group.each { |g| (groups[g] ||= []) << match[1] }
+          end
+        end
+        groups
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_gem_groups failed: #{e.message}" if ENV["DEBUG"]
+        {}
+      end
 
       def parse_lockfile(path)
         gems = {}

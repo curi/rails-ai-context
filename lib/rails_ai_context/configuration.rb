@@ -198,5 +198,29 @@ module RailsAiContext
     def output_dir_for(app)
       @output_dir || app.root.to_s
     end
+
+    def http_port=(value)
+      value = value.to_i
+      raise ArgumentError, "http_port must be between 1 and 65535 (got #{value})" unless value.between?(1, 65535)
+      @http_port = value
+    end
+
+    def cache_ttl=(value)
+      value = value.to_i
+      raise ArgumentError, "cache_ttl must be positive (got #{value})" unless value > 0
+      @cache_ttl = value
+    end
+
+    def max_tool_response_chars=(value)
+      value = value.to_i
+      raise ArgumentError, "max_tool_response_chars must be positive (got #{value})" unless value > 0
+      @max_tool_response_chars = value
+    end
+
+    def query_row_limit=(value)
+      value = value.to_i
+      raise ArgumentError, "query_row_limit must be between 1 and 1000 (got #{value})" unless value.between?(1, 1000)
+      @query_row_limit = value
+    end
   end
 end

@@ -12,17 +12,18 @@ RSpec.describe RailsAiContext::Introspectors::ViewIntrospector do
       expect(result).not_to have_key(:error)
     end
 
-    it "discovers layouts as file names only" do
-      expect(result[:layouts]).to include("application.html.erb")
-      result[:layouts].each do |layout|
-        expect(layout).not_to include("/")
+    it "discovers layouts as hashes with name key" do
+      names = result[:layouts].map { |l| l[:name] }
+      expect(names).to include("application.html.erb")
+      names.each do |name|
+        expect(name).not_to include("/")
       end
     end
 
     it "does not include directories in layouts" do
       result[:layouts].each do |layout|
-        full_path = File.join(Rails.root, "app/views/layouts", layout)
-        expect(File.file?(full_path)).to be(true), "Expected #{layout} to be a file, not a directory"
+        full_path = File.join(Rails.root, "app/views/layouts", layout[:name])
+        expect(File.file?(full_path)).to be(true), "Expected #{layout[:name]} to be a file, not a directory"
       end
     end
 

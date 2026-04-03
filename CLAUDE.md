@@ -56,6 +56,8 @@ structure to AI assistants via the Model Context Protocol (MCP).
 29. **Docs search** — bundled topic index with weighted keyword search, on-demand GitHub fetch
 30. **Safe SQL queries** — defense-in-depth: regex pre-filter + SET TRANSACTION READ ONLY + timeout
 31. **Log reading** — reverse file tail with level filtering and sensitive data redaction
+32. **Config validation** — `http_port`, `cache_ttl`, `max_tool_response_chars`, `query_row_limit` validated on assignment with clear error messages
+33. **Sensitive column redaction** — query tool redacts columns by name AND by suffix pattern (password, secret, token, key, digest, hash) to prevent alias bypass
 
 ## Testing
 

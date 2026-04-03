@@ -13,13 +13,16 @@ module RailsAiContext
       end
 
       def call
-        {
+        result = {
           default_locale: I18n.default_locale.to_s,
           available_locales: I18n.available_locales.map(&:to_s).sort,
           backend: I18n.backend.class.name,
           locale_files: extract_locale_files,
-          total_locale_files: count_locale_files
+          total_locale_files: count_locale_files,
+          locale_coverage: detect_locale_coverage
         }
+        result.merge!(detect_fallback_config)
+        result
       rescue => e
         { error: e.message }
       end
@@ -61,6 +64,48 @@ module RailsAiContext
       def count_keys(hash, depth: 0)
         return 0 unless hash.is_a?(Hash)
         hash.sum { |_, v| v.is_a?(Hash) ? count_keys(v, depth: depth + 1) : 1 }
+      end
+
+      def detect_fallback_config
+        config = {}
+        config[:fallbacks] = I18n.fallbacks.to_h.transform_values { |v| v.map(&:to_s) } if I18n.respond_to?(:fallbacks) && I18n.fallbacks
+        config
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_fallback_config failed: #{e.message}" if ENV["DEBUG"]
+        {}
+      end
+
+      def detect_locale_coverage
+        locales = I18n.available_locales
+        return {} if locales.size < 2
+
+        # Compare key counts between default and other locales
+        coverage = {}
+        default_count = count_keys_for_locale(I18n.default_locale)
+        locales.reject { |l| l == I18n.default_locale }.each do |locale|
+          locale_count = count_keys_for_locale(locale)
+          coverage[locale.to_s] = { keys: locale_count, coverage_pct: default_count > 0 ? ((locale_count.to_f / default_count) * 100).round(1) : 0 }
+        end
+        coverage
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_locale_coverage failed: #{e.message}" if ENV["DEBUG"]
+        {}
+      end
+
+      def count_keys_for_locale(locale)
+        path = Dir.glob(File.join(app.root, "config", "locales", "#{locale}.yml")).first
+        return 0 unless path && File.exist?(path)
+        data = YAML.safe_load(File.read(path), permitted_classes: [ Symbol ])
+        count_nested_keys(data)
+      rescue => e
+        $stderr.puts "[rails-ai-context] count_keys_for_locale failed: #{e.message}" if ENV["DEBUG"]
+        0
+      end
+
+      def count_nested_keys(hash, count = 0)
+        return count unless hash.is_a?(Hash)
+        hash.each_value { |v| count = v.is_a?(Hash) ? count_nested_keys(v, count) : count + 1 }
+        count
       end
     end
   end

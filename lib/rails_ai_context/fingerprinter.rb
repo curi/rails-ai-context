@@ -50,6 +50,8 @@ module RailsAiContext
         WATCHED_FILES.each do |file|
           path = File.join(root, file)
           digest.update(File.mtime(path).to_f.to_s) if File.exist?(path)
+        rescue Errno::ENOENT
+          # File deleted between exist? check and mtime read — skip
         end
 
         WATCHED_DIRS.each do |dir|
@@ -58,6 +60,8 @@ module RailsAiContext
 
           Dir.glob(File.join(full_dir, "**/*.{rb,rake,js,ts,erb,haml,slim,yml}")).sort.each do |path|
             digest.update(File.mtime(path).to_f.to_s)
+          rescue Errno::ENOENT
+            # File deleted between glob and mtime read — skip
           end
         end
 

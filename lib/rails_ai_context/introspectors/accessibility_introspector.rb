@@ -21,6 +21,10 @@ module RailsAiContext
           images: analyze_images(views),
           labels: analyze_labels(views),
           landmarks: extract_landmarks(views),
+          heading_hierarchy: analyze_heading_hierarchy(views),
+          skip_links: detect_skip_links(views),
+          live_regions: count_live_regions(views),
+          form_inputs: analyze_form_inputs(views),
           summary: build_summary(views)
         }
       rescue => e
@@ -148,6 +152,52 @@ module RailsAiContext
         end
 
         landmarks
+      end
+
+      def analyze_heading_hierarchy(views)
+        all_content = views.map { |v| v[:content] }.join("\n")
+        counts = {}
+        (1..6).each do |level|
+          count = all_content.scan(/<h#{level}[\s>]/i).size
+          counts["h#{level}"] = count if count > 0
+        end
+        counts
+      rescue => e
+        $stderr.puts "[rails-ai-context] analyze_heading_hierarchy failed: #{e.message}" if ENV["DEBUG"]
+        {}
+      end
+
+      def detect_skip_links(views)
+        all_content = views.map { |v| v[:content] }.join("\n")
+        {
+          skip_to_content: all_content.scan(/skip.to.(?:content|main)/i).size > 0,
+          skip_navigation: all_content.scan(/skip.nav/i).size > 0
+        }
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_skip_links failed: #{e.message}" if ENV["DEBUG"]
+        {}
+      end
+
+      def count_live_regions(views)
+        all_content = views.map { |v| v[:content] }.join("\n")
+        {
+          aria_live: all_content.scan(/aria-live=["'](\w+)["']/).flatten.tally,
+          aria_atomic: all_content.scan(/aria-atomic=/).size
+        }
+      rescue => e
+        $stderr.puts "[rails-ai-context] count_live_regions failed: #{e.message}" if ENV["DEBUG"]
+        {}
+      end
+
+      def analyze_form_inputs(views)
+        all_content = views.map { |v| v[:content] }.join("\n")
+        {
+          required: all_content.scan(/\brequired\b/).size,
+          input_types: all_content.scan(/type=["'](\w+)["']/).flatten.tally
+        }
+      rescue => e
+        $stderr.puts "[rails-ai-context] analyze_form_inputs failed: #{e.message}" if ENV["DEBUG"]
+        {}
       end
 
       def build_summary(views)

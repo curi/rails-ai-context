@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.4.0] — 2026-04-03
+
+### Added
+- **33 introspector enhancements** — every introspector upgraded with new detection capabilities:
+  - **SchemaIntrospector**: expression indexes, column comments in static parse, `change_column_default`/`change_column_null` in migration replay
+  - **ModelIntrospector**: STI hierarchy detection (parent/children/type column), `attribute` API, enum `_prefix:`/`_suffix:`, `after_commit on:` parsing, inline `private def` exclusion
+  - **RouteIntrospector**: route parameter extraction, root route detection, RESTful action flag
+  - **JobIntrospector**: SolidQueue recurring job config, Sidekiq config (concurrency/queues), job callbacks (`before_perform`, `around_enqueue`, etc.)
+  - **GemIntrospector**: path/git gems from Gemfile, gem group extraction (dev/test/prod)
+  - **ConventionDetector**: multi-tenant (Apartment/ActsAsTenant), feature flags (Flipper/LaunchDarkly), error monitoring (Sentry/Bugsnag/Honeybadger), event-driven (Kafka/RabbitMQ/SNS), Zeitwerk detection, STI with type column verification
+  - **ControllerIntrospector**: `rate_limit` parsed into structured data (to/within/only), inline `private def` exclusion
+  - **StimulusIntrospector**: lifecycle hooks (connect/disconnect/initialize), outlet controller type mapping, action bindings from views (`data-action` parsing)
+  - **ViewIntrospector**: `yield`/`content_for` extraction from layouts, conditional layout detection with only/except
+  - **TurboIntrospector**: stream action semantics (append/update/remove counts), frame `src` URL extraction
+  - **I18nIntrospector**: locale fallback chain detection, locale coverage % per locale
+  - **ConfigIntrospector**: cache store options, error monitoring gem detection, job processor config (Sidekiq queues/concurrency)
+  - **ActiveStorageIntrospector**: attachment validations (content_type/size), variant definitions
+  - **ActionTextIntrospector**: Trix editor customization detection (toolbar/attachment/events)
+  - **AuthIntrospector**: OmniAuth provider detection, Devise settings (timeout/lockout/password_length)
+  - **ApiIntrospector**: GraphQL resolvers/subscriptions/dataloaders, API pagination strategy detection
+  - **TestIntrospector**: shared examples/contexts detection, database cleaner strategy
+  - **RakeTaskIntrospector**: task dependencies (`=> :prerequisite`), task arguments (`[:arg1, :arg2]`)
+  - **AssetPipelineIntrospector**: Bun bundler, Foundation CSS, PostCSS standalone detection
+  - **DevOpsIntrospector**: Fly.io/Render/Railway deployment detection, `docker-compose.yaml` support
+  - **ActionMailboxIntrospector**: mailbox callback detection (before/after/around_processing)
+  - **MigrationIntrospector**: `change_column_default`, `change_column_null`, `add_check_constraint` action detection
+  - **SeedsIntrospector**: CSV loader detection, seed ordering detection
+  - **MiddlewareIntrospector**: middleware added via initializers (`config.middleware.use/insert_before`)
+  - **EngineIntrospector**: route count + model count inside discovered engines
+  - **MultiDatabaseIntrospector**: shard names/keys/count from `connects_to`, improved YAML parsing for nested multi-db configs
+  - **ComponentIntrospector**: `**kwargs` splat prop detection
+  - **AccessibilityIntrospector**: heading hierarchy (h1-h6), skip link detection, `aria-live` regions, form input analysis (required/types)
+  - **PerformanceIntrospector**: polymorphic association compound index detection (`[type, id]`)
+  - **FrontendFrameworkIntrospector**: API client detection (Axios/Apollo/SWR/etc.), component library detection (MUI/Radix/shadcn/etc.)
+  - **DatabaseStatsIntrospector**: MySQL + SQLite support (was PostgreSQL-only), PostgreSQL dead row counts
+  - **ViewTemplateIntrospector**: slot reference detection
+  - **DesignTokenIntrospector**: Tailwind arbitrary value extraction
+
+### Fixed
+- **Security: SQLite SQL injection** — `database_stats_introspector` used string interpolation for table names in COUNT queries; now uses `conn.quote_table_name`
+- **Security: query column redaction bypass** — `SELECT password AS pwd` bypassed redaction; now also matches columns ending in `password`, `secret`, `token`, `key`, `digest`, `hash`
+- **Security: log redaction gaps** — added AWS access key (`AKIA...`), JWT token (`eyJ...`), and SSH/TLS private key header patterns
+- **Security: HTTP bind wildcard** — non-loopback warning now catches `0.0.0.0` and `::` (was only checking 3 specific addresses)
+- **Thread safety: `app_size()` race condition** — `SHARED_CACHE[:context]` read without mutex; now wrapped in `SHARED_CACHE[:mutex].synchronize`
+- **Crash: nil callback filter** — `model_introspector` `cb.filter.to_s` crashed on nil filters; added `cb.filter.nil?` guard
+- **Crash: fingerprinter TOCTOU** — `File.mtime` after `File.exist?` could raise `Errno::ENOENT` if file deleted between calls; added rescue
+- **Crash: tool_runner bounds** — `args[i+1]` access without bounds check; added `i + 1 < args.size` guard
+- **Bug: server logs wrong tool list** — logged all 39 `TOOLS` instead of filtered `active_tools` after `skip_tools`; now shows correct count and names
+- **Bug: STI false positive** — convention detector flagged `Admin < User` as STI even without `type` column; now verifies parent's table has `type` column via schema.rb
+- **Bug: resources bare raise** — `raise "Unknown resource"` changed to `raise RailsAiContext::Error`
+- **Config validation** — `http_port` (1-65535), `cache_ttl` (> 0), `max_tool_response_chars` (> 0), `query_row_limit` (1-1000) now validated on assignment
+
+### Changed
+- Test count: 1529 (unchanged — all new features tested via integration test against sample app)
+
 ## [4.3.3] — 2026-04-02
 
 ### Fixed

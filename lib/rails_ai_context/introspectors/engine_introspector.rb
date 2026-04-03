@@ -99,7 +99,14 @@ module RailsAiContext
           next if engine.name == "RailsAiContext::Engine"
           next if engine.name.start_with?("Rails::", "ActionPack::", "ActionView::", "ActiveModel::")
 
-          { name: engine.name, root: engine.root.to_s.sub("#{Gem.dir}/gems/", "") }
+          entry = { name: engine.name, root: engine.root.to_s.sub("#{Gem.dir}/gems/", "") }
+          # Count routes and models inside the engine
+          if engine.respond_to?(:routes) && engine.routes.respond_to?(:routes)
+            entry[:route_count] = engine.routes.routes.size rescue nil
+          end
+          models_dir = File.join(engine.root.to_s, "app", "models")
+          entry[:model_count] = Dir.glob(File.join(models_dir, "**/*.rb")).size if Dir.exist?(models_dir)
+          entry.compact
         rescue => e
           $stderr.puts "[rails-ai-context] discover_rails_engines failed: #{e.message}" if ENV["DEBUG"]
           nil

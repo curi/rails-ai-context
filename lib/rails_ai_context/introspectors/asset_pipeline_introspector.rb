@@ -51,14 +51,17 @@ module RailsAiContext
         lock_content = read_gemfile_lock
         return nil unless lock_content
 
-        return "tailwindcss" if lock_content.include?("tailwindcss-rails (")
+        return "tailwindcss" if lock_content.include?("tailwindcss-rails (") || package_json_has?("tailwindcss")
         return "bootstrap" if lock_content.include?("bootstrap (") || package_json_has?("bootstrap")
         return "bulma" if package_json_has?("bulma")
+        return "foundation" if package_json_has?("foundation-sites")
+        return "postcss" if package_json_has?("postcss") && !package_json_has?("tailwindcss")
         nil
       end
 
       def detect_js_bundler
         return "importmap" if File.exist?(File.join(root, "config/importmap.rb"))
+        return "bun" if File.exist?(File.join(root, "bun.lockb")) || File.exist?(File.join(root, "bunfig.toml"))
         return "esbuild" if package_json_has?("esbuild")
         return "webpack" if File.exist?(File.join(root, "config/webpack")) || package_json_has?("webpack")
         return "vite" if Dir.glob(File.join(root, "vite.config.*")).any?

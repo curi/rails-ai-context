@@ -40,7 +40,14 @@ module RailsAiContext
             { pattern: match[0], action: match[1] }
           end
 
-          { name: name, file: relative, routing: routing }
+          # Extract callbacks
+          callbacks = content.scan(/\b(before_processing|after_processing|around_processing)\s+:(\w+)/).map do |type, method|
+            { type: type, method: method }
+          end
+
+          entry = { name: name, file: relative, routing: routing }
+          entry[:callbacks] = callbacks if callbacks.any?
+          entry
         rescue => e
           $stderr.puts "[rails-ai-context] extract_mailboxes failed: #{e.message}" if ENV["DEBUG"]
           nil

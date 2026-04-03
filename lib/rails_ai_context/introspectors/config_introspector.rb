@@ -12,7 +12,7 @@ module RailsAiContext
       end
 
       def call
-        {
+        result = {
           cache_store: detect_cache_store,
           session_store: detect_session_store,
           timezone: app.config.time_zone.to_s,
@@ -21,8 +21,19 @@ module RailsAiContext
           middleware_stack: extract_middleware,
           initializers: extract_initializers,
           credentials_configured: credentials_configured?,
-          current_attributes: detect_current_attributes
-        }.compact
+          current_attributes: detect_current_attributes,
+          error_monitoring: detect_error_monitoring,
+          job_processor: detect_job_processor_config
+        }
+
+        # Extract cache store options when configured as an Array
+        if app.config.cache_store.is_a?(Array) && app.config.cache_store.size > 1
+          opts = app.config.cache_store[1..]
+          cache_opts = opts.last.is_a?(Hash) ? opts.last.keys.map(&:to_s) : []
+          result[:cache_store_options] = cache_opts if cache_opts.any?
+        end
+
+        result.compact
       rescue => e
         { error: e.message }
       end
@@ -122,6 +133,39 @@ module RailsAiContext
           $stderr.puts "[rails-ai-context] detect_current_attributes failed: #{e.message}" if ENV["DEBUG"]
           nil
         end
+      end
+
+      def detect_error_monitoring
+        gemfile_lock = File.join(app.root, "Gemfile.lock")
+        return nil unless File.exist?(gemfile_lock)
+        content = File.read(gemfile_lock)
+
+        tools = []
+        tools << "sentry" if content.include?("sentry-ruby") || content.include?("sentry-rails")
+        tools << "bugsnag" if content.include?("bugsnag")
+        tools << "honeybadger" if content.include?("honeybadger")
+        tools << "rollbar" if content.include?("rollbar")
+        tools << "airbrake" if content.include?("airbrake")
+        tools << "appsignal" if content.include?("appsignal")
+        tools.empty? ? nil : tools
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_error_monitoring failed: #{e.message}" if ENV["DEBUG"]
+        nil
+      end
+
+      def detect_job_processor_config
+        config = {}
+        sidekiq_path = File.join(app.root, "config", "sidekiq.yml")
+        if File.exist?(sidekiq_path)
+          content = File.read(sidekiq_path)
+          config[:processor] = "sidekiq"
+          config[:concurrency] = $1.to_i if content.match(/concurrency:\s*(\d+)/)
+          config[:queues] = content.scan(/-\s+(\w+)/).flatten.uniq
+        end
+        config.empty? ? nil : config
+      rescue => e
+        $stderr.puts "[rails-ai-context] detect_job_processor_config failed: #{e.message}" if ENV["DEBUG"]
+        nil
       end
     end
   end

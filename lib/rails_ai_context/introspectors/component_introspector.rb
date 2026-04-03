@@ -150,6 +150,12 @@ module RailsAiContext
           props << prop
         end
 
+        # Detect **kwargs / **options splat
+        if params_str.match?(/\*\*(\w+)/)
+          splat_name = params_str.match(/\*\*(\w+)/)[1]
+          props << { name: splat_name, splat: true }
+        end
+
         props
       end
 

@@ -41,8 +41,10 @@ module RailsAiContext
           relative = path.sub("#{views_dir}/", "")
           content = File.read(path, encoding: "UTF-8", invalid: :replace, undef: :replace) rescue next
 
+          slots = extract_slot_refs(content)
+
           if phlex_view?(path, content)
-            templates[relative] = {
+            entry = {
               lines: content.lines.count,
               partials: extract_partial_refs(content),
               stimulus: extract_stimulus_refs(content),
@@ -50,12 +52,16 @@ module RailsAiContext
               helpers: extract_phlex_helper_calls(content),
               phlex: true
             }
+            entry[:slots] = slots unless slots.empty?
+            templates[relative] = entry
           else
-            templates[relative] = {
+            entry = {
               lines: content.lines.count,
               partials: extract_partial_refs(content),
               stimulus: extract_stimulus_refs(content)
             }
+            entry[:slots] = slots unless slots.empty?
+            templates[relative] = entry
           end
         end
         templates
@@ -822,6 +828,13 @@ module RailsAiContext
           m[0].split.each { |c| refs << c }
         end
         refs.uniq
+      end
+
+      def extract_slot_refs(content)
+        content.scan(/\b(?:renders_one|renders_many)\s+:(\w+)/).flatten
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_slot_refs failed: #{e.message}" if ENV["DEBUG"]
+        []
       end
     end
   end

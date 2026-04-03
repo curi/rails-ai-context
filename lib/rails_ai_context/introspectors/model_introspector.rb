@@ -91,6 +91,14 @@ module RailsAiContext
           instance_methods: extract_public_instance_methods(model)
         }
 
+        # STI hierarchy detection
+        sti_info = extract_sti_info(model)
+        details[:sti] = sti_info if sti_info
+
+        # Enum prefix/suffix options
+        enum_options = extract_enum_options(model)
+        details[:enum_options] = enum_options if enum_options.any?
+
         # Source-based macro extractions
         macros = extract_source_macros(model)
         details.merge!(macros)
@@ -100,6 +108,45 @@ module RailsAiContext
         details.merge!(detailed)
 
         details.compact
+      end
+
+      def extract_sti_info(model)
+        has_type_column = if model.connected? && model.table_exists?
+          model.columns_hash.key?("type")
+        else
+          # Fallback: check schema.rb for type column
+          schema_path = File.join(app.root.to_s, "db", "schema.rb")
+          if File.exist?(schema_path)
+            schema = File.read(schema_path)
+            table_section = schema[/create_table\s+"#{Regexp.escape(model.table_name)}".*?end/m]
+            table_section&.match?(/t\.\w+\s+"type"/)
+          end
+        end
+
+        return nil unless has_type_column
+
+        children = if model.respond_to?(:descendants)
+          model.descendants.map(&:name).compact.sort
+        elsif model.respond_to?(:subclasses)
+          model.subclasses.map(&:name).compact.sort
+        else
+          []
+        end
+
+        parent = model.superclass
+        sti_parent = if parent && parent != ActiveRecord::Base &&
+                        (!defined?(ApplicationRecord) || parent != ApplicationRecord)
+          parent.name
+        end
+
+        {
+          sti_base: sti_parent.nil? && children.any?,
+          sti_parent: sti_parent,
+          sti_children: children.empty? ? nil : children
+        }.compact
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_sti_info failed: #{e.message}" if ENV["DEBUG"]
+        nil
       end
 
       def extract_associations(model)
@@ -165,6 +212,35 @@ module RailsAiContext
         model.defined_enums.transform_values { |mapping| mapping.dup }
       end
 
+      def extract_enum_options(model)
+        source_path = model_source_path(model)
+        return {} unless source_path && File.exist?(source_path)
+
+        source = File.read(source_path)
+        options = {}
+        source.each_line do |line|
+          next unless line.match?(/\A\s*enum\s+/)
+          # Match both `enum :name, { ... }` and `enum name: { ... }` forms
+          name_match = line.match(/enum\s+:(\w+)/) || line.match(/enum\s+(\w+):/)
+          next unless name_match
+          enum_name = name_match[1]
+          entry = {}
+          entry[:prefix] = true if line.match?(/_?prefix:\s*true/)
+          entry[:suffix] = true if line.match?(/_?suffix:\s*true/)
+          if (prefix_val = line.match(/_?prefix:\s*:(\w+)/))
+            entry[:prefix] = prefix_val[1]
+          end
+          if (suffix_val = line.match(/_?suffix:\s*:(\w+)/))
+            entry[:suffix] = suffix_val[1]
+          end
+          options[enum_name] = entry if entry.any?
+        end
+        options
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_enum_options failed: #{e.message}" if ENV["DEBUG"]
+        {}
+      end
+
       def extract_callbacks(model)
         callback_types = %i[
           before_validation after_validation
@@ -177,7 +253,7 @@ module RailsAiContext
 
         result = callback_types.each_with_object({}) do |type, hash|
           callbacks = model.send(:"_#{type}_callbacks").reject do |cb|
-            cb.filter.to_s.start_with?(*EXCLUDED_CALLBACKS) || cb.filter.is_a?(Proc)
+            cb.filter.nil? || cb.filter.to_s.start_with?(*EXCLUDED_CALLBACKS) || cb.filter.is_a?(Proc)
           end
 
           next if callbacks.empty?
@@ -204,6 +280,11 @@ module RailsAiContext
           if (match = line.match(/\A\s*(before_validation|after_validation|before_save|after_save|before_create|after_create|before_update|after_update|before_destroy|after_destroy|after_commit|after_rollback)\s+:(\w+)/))
             type = match[1]
             method_name = match[2]
+            on_match = line.match(/on:\s*(?::(\w+)|\[([^\]]+)\])/)
+            if on_match && type.start_with?("after_commit")
+              events = on_match[1] ? [ on_match[1] ] : on_match[2].scan(/:(\w+)/).flatten
+              type = events.map { |e| "after_commit_on_#{e}" }.join(", ")
+            end
             (callbacks[type] ||= []) << method_name
           end
         end
@@ -332,6 +413,8 @@ module RailsAiContext
         source.each_line do |line|
           in_private = true if line.match?(/\A\s*private\s*$/)
           next if in_private
+          # Also detect inline private/protected modifiers
+          next if line.match?(/\A\s*(?:private|protected)\s+def\s/)
           next if line.match?(/\A\s*def self\./)
           if (match = line.match(/\A\s*def (\w+[?!]?)/))
             methods << match[1] unless match[1] == "initialize"
@@ -379,6 +462,10 @@ module RailsAiContext
         macros[:generates_token_for] = source.scan(/\bgenerates_token_for\s+:(\w+)/).flatten if source.match?(/\bgenerates_token_for\s+:/)
         macros[:serialize] = source.scan(/\bserialize\s+:(\w+)/).flatten if source.match?(/\bserialize\s+:/)
         macros[:store] = source.scan(/\bstore(?:_accessor)?\s+:(\w+)/).flatten if source.match?(/\bstore(?:_accessor)?\s+:/)
+
+        # attribute API declarations (e.g. attribute :field, :type)
+        attributes = source.scan(/\battribute\s+:(\w+),\s*:(\w+)/).map { |name, type| { name: name, type: type } }
+        macros[:attributes] = attributes if attributes.any?
 
         # Constants with value lists (e.g. STATUSES = %w[pending completed])
         constants = source.scan(/\b([A-Z][A-Z_]+)\s*=\s*%[wi]\[([^\]]+)\]/).map do |name, values|

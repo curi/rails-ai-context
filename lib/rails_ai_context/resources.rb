@@ -113,7 +113,7 @@ module RailsAiContext
           content = JSON.pretty_generate(data)
           [ { uri: uri, mime_type: "application/json", text: content } ]
         else
-          raise "Unknown resource: #{uri}"
+          raise RailsAiContext::Error, "Unknown resource: #{uri}"
         end
       end
     end

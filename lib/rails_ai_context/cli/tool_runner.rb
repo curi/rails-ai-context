@@ -178,7 +178,7 @@ module RailsAiContext
                 next
               end
 
-              value = args[i + 1]
+              value = (i + 1 < args.size) ? args[i + 1] : nil
               if value && !value.start_with?("--")
                 result[key] = coerce_value(value, prop)
                 i += 2

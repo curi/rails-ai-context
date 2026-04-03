@@ -20,7 +20,9 @@ module RailsAiContext
         {
           jobs: jobs,
           mailers: extract_mailers,
-          channels: extract_channels
+          channels: extract_channels,
+          recurring_jobs: extract_solid_queue_recurring,
+          sidekiq_config: extract_sidekiq_config
         }
       end
 
@@ -74,16 +76,53 @@ module RailsAiContext
           perform_match = source.match(/def\s+perform\s*\(([^)]*)\)/)
           perform_signature = perform_match ? perform_match[1].strip : nil
 
+          callbacks = source.scan(/\b(before_enqueue|after_enqueue|before_perform|after_perform|around_perform|around_enqueue)\b/).flatten.uniq
+
           job = { name: name }
           job[:queue] = queue if queue
           job[:retry_on] = retry_on if retry_on.any?
           job[:discard_on] = discard_on if discard_on.any?
           job[:perform_signature] = perform_signature if perform_signature
+          job[:callbacks] = callbacks if callbacks.any?
           job
         end.sort_by { |j| j[:name] }
       rescue => e
         $stderr.puts "[rails-ai-context] extract_jobs_from_source failed: #{e.message}" if ENV["DEBUG"]
         []
+      end
+
+      def extract_solid_queue_recurring
+        paths = [
+          File.join(app.root, "config", "recurring.yml"),
+          File.join(app.root, "config", "solid_queue.yml")
+        ]
+        path = paths.find { |p| File.exist?(p) }
+        return [] unless path
+
+        content = File.read(path)
+        jobs = []
+        content.scan(/(\w+):\s*\n\s+class:\s*(\w+).*?(?:schedule:\s*["']?([^"'\n]+))?/m) do |name, klass, schedule|
+          jobs << { name: name, class: klass, schedule: schedule&.strip }.compact
+        end
+        jobs
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_solid_queue_recurring failed: #{e.message}" if ENV["DEBUG"]
+        []
+      end
+
+      def extract_sidekiq_config
+        path = File.join(app.root, "config", "sidekiq.yml")
+        return nil unless File.exist?(path)
+
+        content = File.read(path)
+        config = {}
+        config[:concurrency] = $1.to_i if content.match(/concurrency:\s*(\d+)/)
+        queues = content.scan(/-\s*(?:\[?\s*)?(\w+)/).flatten.uniq
+        config[:queues] = queues if queues.any?
+        config.empty? ? nil : config
+      rescue => e
+        $stderr.puts "[rails-ai-context] extract_sidekiq_config failed: #{e.message}" if ENV["DEBUG"]
+        nil
       end
 
       def extract_mailers

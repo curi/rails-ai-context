@@ -55,6 +55,9 @@ module RailsAiContext
         /(?<=cookie:\s)\S+/i,
         /(?<=session_id=)\S+/i,
         /(?<=_session=)\S+/i,
+        /\bAKIA[0-9A-Z]{16}\b/,                          # AWS access key IDs
+        /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/,  # JWT tokens
+        /-----BEGIN\s+(RSA|DSA|EC|OPENSSH)?\s*PRIVATE KEY-----/,       # SSH/TLS private keys
         /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z]{2,}\b/i
       ].freeze
 

@@ -211,12 +211,20 @@ module RailsAiContext
               col[:default] = raw.start_with?('"') ? raw[1..-2] : raw
             end
             col[:array] = true if line.include?("array: true")
+            if (comment_match = line.match(/comment:\s*"([^"]+)"/))
+              col[:comment] = comment_match[1]
+            end
             tables[current_table][:columns] << col
           elsif current_table && (match = line.match(/t\.index\s+\[([^\]]*)\]/))
             cols = match[1].scan(/["'](\w+)["']/).flatten
             unique = line.include?("unique: true")
             idx_name = line.match(/name:\s*["']([^"']+)["']/)&.send(:[], 1)
             tables[current_table][:indexes] << { name: idx_name, columns: cols, unique: unique }.compact if cols.any?
+          elsif current_table && (match = line.match(/t\.index\s+"([^"]+)"/))
+            expression = match[1]
+            idx_name = line.match(/name:\s*["']([^"']+)["']/)&.send(:[], 1)
+            unique = line.include?("unique: true")
+            tables[current_table][:indexes] << { name: idx_name, columns: [ expression ], unique: unique, expression: true }.compact
           elsif (match = line.match(/add_index\s+"(\w+)",\s+(.+)/))
             table_name = match[1]
             rest = match[2]
@@ -501,6 +509,29 @@ module RailsAiContext
             if tables[table_name]
               col = tables[table_name][:columns].find { |c| c[:name] == col_name }
               col[:type] = new_type if col
+            end
+
+          # change_column_default :table, :column, default_value
+          elsif (match = stripped.match(/change_column_default\s+[:"'](\w+)['"']?,\s*[:"'](\w+)/))
+            table_name, col_name = match[1], match[2]
+            if tables[table_name]
+              col = tables[table_name][:columns].find { |c| c[:name] == col_name }
+              if col
+                default_match = stripped.match(/,\s*(?:from:\s*[^,]+,\s*)?to:\s*("[^"]*"|\d+(?:\.\d+)?|true|false|nil)/)
+                default_match ||= stripped.match(/,\s*[:"']\w+['"']?,\s*("[^"]*"|\d+(?:\.\d+)?|true|false|nil)\s*\z/)
+                if default_match
+                  raw = default_match[1]
+                  col[:default] = raw == "nil" ? nil : (raw.start_with?('"') ? raw[1..-2] : raw)
+                end
+              end
+            end
+
+          # change_column_null :table, :column, nullable
+          elsif (match = stripped.match(/change_column_null\s+[:"'](\w+)['"']?,\s*[:"'](\w+)['"']?,\s*(true|false)/))
+            table_name, col_name, nullable = match[1], match[2], match[3]
+            if tables[table_name]
+              col = tables[table_name][:columns].find { |c| c[:name] == col_name }
+              col[:null] = (nullable == "true") if col
             end
 
           # rename_table :old, :new

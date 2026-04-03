@@ -150,7 +150,7 @@ module RailsAiContext
         # App size classification — tools use this to auto-tune pagination and detail
         # small: <15 models, medium: 15-50 models, large: 50+ models
         def app_size
-          ctx = SHARED_CACHE[:context]
+          ctx = SHARED_CACHE[:mutex].synchronize { SHARED_CACHE[:context] }
           return :medium unless ctx
 
           model_count = ctx[:models]&.size || 0
