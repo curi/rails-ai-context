@@ -59,16 +59,29 @@ class RailsAiContextCLI < Thor
     end
 
     desc "context", "Generate AI context files"
-    option :format, type: :string, default: "all", desc: "Format: claude, cursor, copilot, json, all"
+    option :format, type: :string, default: nil, desc: "Format: claude, cursor, copilot, json, all (default: from config)"
     def context
       boot_rails!
-      require "rails_ai_context"
 
-      format = options[:format].to_sym
       $stderr.puts "Introspecting Rails app..."
-      result = RailsAiContext.generate_context(format: format)
-      result[:written].each { |f| $stderr.puts "  Written: #{f}" }
-      result[:skipped].each { |f| $stderr.puts "  Skipped: #{f} (unchanged)" }
+
+      if options[:format]
+        # Explicit --format flag overrides config
+        result = RailsAiContext.generate_context(format: options[:format].to_sym)
+        print_context_result(result)
+      else
+        # Use ai_tools from config (.rails-ai-context.yml or initializer)
+        ai_tools = RailsAiContext.configuration.ai_tools
+        if ai_tools.nil? || ai_tools.empty?
+          result = RailsAiContext.generate_context(format: :all)
+          print_context_result(result)
+        else
+          ai_tools.each do |fmt|
+            result = RailsAiContext.generate_context(format: fmt)
+            print_context_result(result)
+          end
+        end
+      end
     end
 
     desc "inspect", "Print introspection summary"
@@ -262,6 +275,11 @@ class RailsAiContextCLI < Thor
       $stderr.puts ""
       $stderr.puts "Config: .rails-ai-context.yml (edit anytime, no restart needed)"
       $stderr.puts ""
+    end
+
+    def print_context_result(result)
+      (result[:written] || []).each { |f| $stderr.puts "  Written: #{f}" }
+      (result[:skipped] || []).each { |f| $stderr.puts "  Skipped: #{f} (unchanged)" }
     end
 
     def boot_rails!
