@@ -13,6 +13,12 @@ RSpec.describe RailsAiContext::Configuration, "YAML loading" do
     RailsAiContext.instance_variable_set(:@configured_via_block, false)
   end
 
+  after do
+    # Restore clean state so other specs don't see leaked config
+    RailsAiContext.configuration = RailsAiContext::Configuration.new
+    RailsAiContext.instance_variable_set(:@configured_via_block, false)
+  end
+
   describe ".load_from_yaml" do
     it "loads ai_tools and tool_mode from YAML" do
       Dir.mktmpdir do |dir|
