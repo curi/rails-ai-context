@@ -4,7 +4,7 @@ module RailsAiContext
   module Introspectors
     # Detects high-level Rails conventions and patterns in use,
     # giving AI assistants critical context about the app's architecture.
-    class ConventionDetector
+    class ConventionIntrospector
       attr_reader :app
 
       def initialize(app)

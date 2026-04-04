@@ -82,12 +82,6 @@ module RailsAiContext
           end
         end
 
-        def session_queried?(tool_name, **params)
-          SESSION_CONTEXT[:mutex].synchronize do
-            SESSION_CONTEXT[:queries].key?(session_key(tool_name, params))
-          end
-        end
-
         def session_queries
           SESSION_CONTEXT[:mutex].synchronize do
             SESSION_CONTEXT[:queries].values.dup
@@ -117,13 +111,6 @@ module RailsAiContext
           end
 
           { items: sliced, hint: hint, total: total, offset: offset, limit: limit }
-        end
-
-        # Auto-compress: if text exceeds 85% of max, call the fallback lambda for a shorter version
-        def auto_compress(full_text, &fallback)
-          max = config.max_tool_response_chars
-          return full_text if !max || full_text.length <= (max * 0.85).to_i
-          fallback ? fallback.call : full_text
         end
 
         # Structured not-found error with fuzzy suggestion and recovery hint.
@@ -164,22 +151,6 @@ module RailsAiContext
         # Cache key for paginated responses — lets agents detect stale data between pages
         def cache_key
           SHARED_CACHE[:fingerprint] || "none"
-        end
-
-        # App size classification — tools use this to auto-tune pagination and detail
-        # small: <15 models, medium: 15-50 models, large: 50+ models
-        def app_size
-          ctx = SHARED_CACHE[:mutex].synchronize { SHARED_CACHE[:context] }
-          return :medium unless ctx
-
-          model_count = ctx[:models]&.size || 0
-          table_count = ctx.dig(:schema, :tables)&.size || 0
-          biggest = [ model_count, table_count ].max
-
-          if biggest > 50 then :large
-          elsif biggest > 15 then :medium
-          else :small
-          end
         end
 
         # Store call params for the current tool invocation (thread-safe)

@@ -127,4 +127,43 @@ RSpec.describe RailsAiContext::Tools::GetRoutes do
       expect(text).to include("api/v1")
     end
   end
+
+  describe "summary detail with route counts" do
+    before do
+      summary_controllers = {
+        "users" => [
+          { verb: "GET", path: "/users", action: "index", name: "users" },
+          { verb: "GET", path: "/users/:id", action: "show", name: "user" },
+          { verb: "POST", path: "/users", action: "create", name: nil }
+        ],
+        "posts" => [
+          { verb: "GET", path: "/posts", action: "index", name: "posts" },
+          { verb: "GET", path: "/posts/:id", action: "show", name: "post" }
+        ],
+        "api/v1/items" => [
+          { verb: "GET", path: "/api/v1/items", action: "index", name: "api_v1_items" }
+        ]
+      }
+      allow(described_class).to receive(:cached_context).and_return({
+        routes: { total_routes: 6, by_controller: summary_controllers, api_namespaces: [ "api/v1" ] }
+      })
+    end
+
+    it "returns summary with route counts per controller" do
+      result = described_class.call(detail: "summary")
+      text = result.content.first[:text]
+      expect(text).to include("Routes Summary (6 routes)")
+      expect(text).to include("**users**")
+      expect(text).to include("3 routes")
+      expect(text).to include("api/v1")
+    end
+  end
+
+  describe "case-insensitive controller filter" do
+    it "filters by controller name case-insensitively" do
+      result = described_class.call(controller: "POSTS", detail: "summary")
+      text = result.content.first[:text]
+      expect(text).to include("**posts**")
+    end
+  end
 end

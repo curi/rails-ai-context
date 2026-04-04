@@ -6,7 +6,11 @@
 # may need different versions of those deps (e.g., bigdecimal 4.1.0 activated here
 # but Gemfile.lock wants 4.0.1). Clear non-default gem activations so Bundler can
 # resolve cleanly. The $LOAD_PATH entries remain (Bundler.setup replaces them anyway).
-if defined?(Gem) && Gem.respond_to?(:loaded_specs)
+#
+# Skip this when running under `bundle exec` — Bundler has already resolved gems
+# correctly, and clearing specs breaks gems that look up their own path at runtime
+# (e.g., MCP SDK reads Gem.loaded_specs["json-schema"].full_gem_path).
+if defined?(Gem) && Gem.respond_to?(:loaded_specs) && !ENV["BUNDLE_BIN_PATH"]
   Gem.loaded_specs.delete_if { |_, spec| !spec.default_gem? }
 end
 

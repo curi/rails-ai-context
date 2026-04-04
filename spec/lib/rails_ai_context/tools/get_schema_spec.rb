@@ -198,4 +198,27 @@ RSpec.describe RailsAiContext::Tools::GetSchema do
       expect(text).to include("[unique]")
     end
   end
+
+  describe "summary detail with many tables" do
+    before do
+      many_tables = 50.times.each_with_object({}) do |i, h|
+        h["table_#{i.to_s.rjust(3, '0')}"] = {
+          columns: 10.times.map { |j| { name: "col_#{j}", type: "string", null: true } },
+          indexes: [ { name: "idx_#{i}", columns: [ "col_0" ], unique: false } ],
+          foreign_keys: []
+        }
+      end
+      allow(described_class).to receive(:cached_context).and_return({
+        schema: { adapter: "postgresql", tables: many_tables, total_tables: 50 }
+      })
+    end
+
+    it "returns compact summary with detail:summary" do
+      result = described_class.call(detail: "summary")
+      text = result.content.first[:text]
+      expect(text).to include("Schema Summary (50 tables)")
+      expect(text).to include("10 columns")
+      expect(text).not_to include("| Column |")
+    end
+  end
 end

@@ -52,7 +52,7 @@ module RailsAiContext
         # Gems by category
         gems = context[:gems]
         if gems.is_a?(Hash) && !gems[:error]
-          notable = gems[:notable_gems] || gems[:notable] || gems[:detected] || []
+          notable = notable_gems_list(gems)
           notable.group_by { |g| g[:category]&.to_s || "other" }.each do |cat, list|
             lines << "- #{cat}: #{list.map { |g| g[:name] }.join(', ')}"
           end
@@ -80,8 +80,8 @@ module RailsAiContext
           arch = conv[:architecture] || []
           patterns = conv[:patterns] || []
           if arch.any? || patterns.any?
-            arch_labels = RailsAiContext::Tools::GetConventions::ARCH_LABELS rescue {}
-            pattern_labels = RailsAiContext::Tools::GetConventions::PATTERN_LABELS rescue {}
+            arch_labels = arch_labels_hash
+            pattern_labels = pattern_labels_hash
             lines << "## Architecture"
             arch.each { |p| lines << "- #{arch_labels[p] || p}" }
             patterns.first(10).each { |p| lines << "- #{pattern_labels[p] || p}" }

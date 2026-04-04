@@ -19,34 +19,18 @@ module RailsAiContext
       # @return [Hash] { written: [paths], skipped: [paths] }
       def call(output_dir)
         rules_dir = File.join(output_dir, ".claude", "rules")
-        FileUtils.mkdir_p(rules_dir)
-
-        written = []
-        skipped = []
 
         files = {
-          "rails-context.md" => render_context_overview,
-          "rails-schema.md" => render_schema_reference,
-          "rails-models.md" => render_models_reference,
-          "rails-ui-patterns.md" => render_ui_patterns_reference,
-          "rails-mcp-tools.md" => render_mcp_tools_reference,
-          "rails-components.md" => render_components_reference,
-          "rails-accessibility.md" => render_accessibility_reference
+          File.join(rules_dir, "rails-context.md") => render_context_overview,
+          File.join(rules_dir, "rails-schema.md") => render_schema_reference,
+          File.join(rules_dir, "rails-models.md") => render_models_reference,
+          File.join(rules_dir, "rails-ui-patterns.md") => render_ui_patterns_reference,
+          File.join(rules_dir, "rails-mcp-tools.md") => render_mcp_tools_reference,
+          File.join(rules_dir, "rails-components.md") => render_components_reference,
+          File.join(rules_dir, "rails-accessibility.md") => render_accessibility_reference
         }
 
-        files.each do |filename, content|
-          next unless content
-
-          filepath = File.join(rules_dir, filename)
-          if File.exist?(filepath) && File.read(filepath) == content
-            skipped << filepath
-          else
-            File.write(filepath, content)
-            written << filepath
-          end
-        end
-
-        { written: written, skipped: skipped }
+        write_rule_files(files)
       end
 
       private
@@ -74,17 +58,8 @@ module RailsAiContext
         lines.concat(full_preset_stack_lines)
 
         # ApplicationController before_actions — apply to all controllers
-        begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          app_ctrl_file = File.join(root, "app", "controllers", "application_controller.rb")
-          if File.exist?(app_ctrl_file)
-            source = File.read(app_ctrl_file)
-            before_actions = source.scan(/before_action\s+:([\w!?]+)/).flatten
-            if before_actions.any?
-              lines << "" << "**Global before_actions:** #{before_actions.join(', ')}"
-            end
-          end
-        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
+        before_actions = detect_before_actions
+        lines << "" << "**Global before_actions:** #{before_actions.join(', ')}" if before_actions.any?
 
         lines << ""
         lines << "ALWAYS use MCP tools for context — do NOT read reference files directly."
@@ -206,7 +181,7 @@ module RailsAiContext
 
           # Include scopes so agents know available query methods
           scopes = data[:scopes] || []
-          scope_names = scopes.map { |s| s.is_a?(Hash) ? s[:name] : s }
+          scope_names = scope_names(scopes)
           lines << "  scopes: #{scope_names.join(', ')}" if scopes.any?
 
           # Instance methods — filter Devise/framework internals that add noise
@@ -248,8 +223,7 @@ module RailsAiContext
 
         # Shared partials — so agents reuse them instead of recreating
         begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          shared_dir = File.join(root, "app", "views", "shared")
+          shared_dir = File.join(project_root, "app", "views", "shared")
           if Dir.exist?(shared_dir)
             partials = Dir.glob(File.join(shared_dir, "_*.html.erb"))
               .map { |f| File.basename(f) }
@@ -263,8 +237,7 @@ module RailsAiContext
 
         # Helpers — so agents use existing helpers instead of creating new ones
         begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          helper_file = File.join(root, "app", "helpers", "application_helper.rb")
+          helper_file = File.join(project_root, "app", "helpers", "application_helper.rb")
           if File.exist?(helper_file)
             helper_methods = File.read(helper_file).scan(/def\s+(\w+)/).flatten
             if helper_methods.any?

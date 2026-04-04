@@ -2,7 +2,7 @@
 
 require "spec_helper"
 
-RSpec.describe RailsAiContext::Introspectors::ConventionDetector do
+RSpec.describe RailsAiContext::Introspectors::ConventionIntrospector do
   let(:introspector) { described_class.new(Rails.application) }
 
   describe "#call" do

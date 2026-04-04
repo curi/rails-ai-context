@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [4.6.0] — 2026-04-04
+
+### Added
+- **Integration test suite** — 3 purpose-built Rails 8 apps exercising every gem feature end-to-end:
+  - `full_app` — comprehensive app (38 gems, 14 models, 15 controllers, 26 views, 5 jobs, 3 mailers, multi-database, ViewComponent, Stimulus, STI, polymorphic, AASM, PaperTrail, FriendlyId, encrypted attributes, CurrentAttributes, Flipper feature flags, Sentry monitoring, Pundit auth, Ransack search, Dry-rb, acts_as_tenant, Docker, Kamal, GitHub Actions CI, RSpec + FactoryBot)
+  - `api_app` — API-only app (Products/Orders/OrderItems, namespaced API v1 routes, CLI tool_mode)
+  - `minimal_app` — bare minimum app (single model, graceful degradation testing)
+- **Master test runner** (`test_apps/run_all_tests.sh`) — validates Doctor, context generation, all 33 introspectors, all 39 MCP tools, Rake tasks, MCP server startup, and app-specific pattern detection across all 3 apps (222 tests)
+- All 3 test apps achieve **100/100 AI Readiness Score**
+
+### Fixed
+- **Standalone CLI `full_gem_path` crash** — `Gem.loaded_specs.delete_if { |_, spec| !spec.default_gem? }` in the exe file cleared gem specs needed by MCP SDK at runtime (`json-schema` gem's `full_gem_path` returned nil). Added `!ENV["BUNDLE_BIN_PATH"]` guard so cleanup only runs in true standalone mode, not under `bundle exec`. This bug affected ALL `rails-ai-context tool` commands in standalone mode.
+
+### Changed
+- Test count: 1621 RSpec examples + 222 integration tests across 3 apps
+
 ## [4.5.2] — 2026-04-04
 
 ### Added
@@ -30,8 +46,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CLI error messages** — Clean error messages for all CLI error paths
 - **Rake/init parity** — `rake ai:context` and `init` command now match generator output
 
+### Refactored
+- **SLOP audit: ~640 lines removed** — comprehensive audit eliminating superfluous abstractions, dead code, and duplicated patterns
+- **CompactSerializerHelper** — extracted shared logic from ClaudeSerializer and OpencodeSerializer, eliminating ~75% duplication
+- **StackOverviewHelper consolidation** — moved `project_root`, `detect_service_files`, `detect_job_files`, `detect_before_actions`, `scope_names`, `notable_gems_list`, `arch_labels_hash`, `pattern_labels_hash`, `write_rule_files` into shared module, replacing 30+ duplicate copies across 6 serializers
+- **Atomic file writes** — `write_rule_files` uses temp file + rename for crash-safe context file generation
+- **ConventionDetector → ConventionIntrospector** — renamed for naming consistency with all 33 other introspectors
+- **MarkdownEscape inlined** — single-use module inlined into MarkdownSerializer as private method
+- **RulesSerializer deleted** — dead code never called by ContextFileSerializer
+- **BaseTool cleanup** — removed dead `auto_compress`, `app_size`, `session_queried?` methods
+- **IntrospectionError deleted** — exception class never raised anywhere
+- **mobile_paths config removed** — config option never read by any introspector, tool, or serializer
+- **server_version** — changed from attr_accessor to method delegating to `VERSION` constant
+- **Configuration constants** — extracted `DEFAULT_EXCLUDED_FILTERS`, `DEFAULT_EXCLUDED_MIDDLEWARE`, `DEFAULT_EXCLUDED_CONCERNS` as frozen constants
+- **Detail spec consolidation** — merged 5 detail spec files into their base spec counterparts
+- **Orphaned spec cleanup** — removed `gem_introspector_spec.rb` duplicate (canonical spec already exists under introspectors/)
+
 ### Changed
-- Test count: 1658 examples (76 new tests for Phase 2 features)
+- Test count: 1621 examples (consolidated from 1658 — no coverage lost, only duplicate/orphaned specs removed)
 
 ## [4.4.0] — 2026-04-03
 

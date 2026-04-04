@@ -75,19 +75,10 @@ end
 RSpec.describe "BaseTool session helpers" do
   before { RailsAiContext::Tools::BaseTool.session_reset! }
 
-  it "session_queried? returns false for unqueried tool" do
-    expect(RailsAiContext::Tools::BaseTool.session_queried?("get_schema", table: "users")).to be false
-  end
-
-  it "session_queried? returns true after recording" do
-    RailsAiContext::Tools::BaseTool.session_record("get_schema", { table: "users" })
-    expect(RailsAiContext::Tools::BaseTool.session_queried?("get_schema", table: "users")).to be true
-  end
-
   it "session_reset! clears all state" do
     RailsAiContext::Tools::BaseTool.session_record("get_schema", { table: "users" })
     RailsAiContext::Tools::BaseTool.session_reset!
-    expect(RailsAiContext::Tools::BaseTool.session_queried?("get_schema", table: "users")).to be false
+    expect(RailsAiContext::Tools::BaseTool.session_queries).to be_empty
   end
 
   it "is thread-safe for concurrent marks" do

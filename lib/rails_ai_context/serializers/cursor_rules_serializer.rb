@@ -20,31 +20,16 @@ module RailsAiContext
       # @return [Hash] { written: [paths], skipped: [paths] }
       def call(output_dir)
         rules_dir = File.join(output_dir, ".cursor", "rules")
-        FileUtils.mkdir_p(rules_dir)
-
-        written = []
-        skipped = []
 
         files = {
-          "rails-project.mdc" => render_project_rule,
-          "rails-models.mdc" => render_models_rule,
-          "rails-controllers.mdc" => render_controllers_rule,
-          "rails-ui-patterns.mdc" => render_ui_patterns_rule,
-          "rails-mcp-tools.mdc" => render_mcp_tools_rule
+          File.join(rules_dir, "rails-project.mdc") => render_project_rule,
+          File.join(rules_dir, "rails-models.mdc") => render_models_rule,
+          File.join(rules_dir, "rails-controllers.mdc") => render_controllers_rule,
+          File.join(rules_dir, "rails-ui-patterns.mdc") => render_ui_patterns_rule,
+          File.join(rules_dir, "rails-mcp-tools.mdc") => render_mcp_tools_rule
         }
 
-        files.each do |filename, content|
-          next unless content
-          filepath = File.join(rules_dir, filename)
-          if File.exist?(filepath) && File.read(filepath) == content
-            skipped << filepath
-          else
-            File.write(filepath, content)
-            written << filepath
-          end
-        end
-
-        { written: written, skipped: skipped }
+        write_rule_files(files)
       end
 
       private
@@ -78,7 +63,7 @@ module RailsAiContext
 
         gems = context[:gems]
         if gems.is_a?(Hash) && !gems[:error]
-          notable = gems[:notable_gems] || gems[:notable] || gems[:detected] || []
+          notable = notable_gems_list(gems)
           grouped = notable.group_by { |g| g[:category]&.to_s || "other" }
           grouped.each do |cat, gem_list|
             lines << "- #{cat}: #{gem_list.map { |g| g[:name] }.join(', ')}"
@@ -87,46 +72,23 @@ module RailsAiContext
 
         conv = context[:conventions]
         if conv.is_a?(Hash) && !conv[:error]
-          arch_labels = RailsAiContext::Tools::GetConventions::ARCH_LABELS rescue {}
+          arch_labels = arch_labels_hash
           (conv[:architecture] || []).first(5).each { |p| lines << "- #{arch_labels[p] || p}" }
         end
 
         lines.concat(full_preset_stack_lines)
 
         # List service objects
-        begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          services_dir = File.join(root, "app", "services")
-          if Dir.exist?(services_dir)
-            service_files = Dir.glob(File.join(services_dir, "*.rb"))
-              .map { |f| File.basename(f, ".rb").camelize }
-              .reject { |s| s == "ApplicationService" }
-            lines << "- Services: #{service_files.join(', ')}" if service_files.any?
-          end
-        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
+        services = detect_service_files
+        lines << "- Services: #{services.join(', ')}" if services.any?
 
         # List jobs
-        begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          jobs_dir = File.join(root, "app", "jobs")
-          if Dir.exist?(jobs_dir)
-            job_files = Dir.glob(File.join(jobs_dir, "*.rb"))
-              .map { |f| File.basename(f, ".rb").camelize }
-              .reject { |j| j == "ApplicationJob" }
-            lines << "- Jobs: #{job_files.join(', ')}" if job_files.any?
-          end
-        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
+        jobs = detect_job_files
+        lines << "- Jobs: #{jobs.join(', ')}" if jobs.any?
 
         # ApplicationController before_actions
-        begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          app_ctrl = File.join(root, "app", "controllers", "application_controller.rb")
-          if File.exist?(app_ctrl)
-            source = File.read(app_ctrl)
-            before_actions = source.scan(/before_action\s+:([\w!?]+)/).flatten
-            lines << "" << "Global before_actions: #{before_actions.join(', ')}" if before_actions.any?
-          end
-        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
+        before_actions = detect_before_actions
+        lines << "" << "Global before_actions: #{before_actions.join(', ')}" if before_actions.any?
 
         lines << ""
         lines << "MCP tools available — see rails-mcp-tools.mdc for full reference."
@@ -162,7 +124,7 @@ module RailsAiContext
           constants = (data[:constants] || [])
           if scopes.any? || constants.any?
             extras = []
-            scope_names = scopes.map { |s| s.is_a?(Hash) ? s[:name] : s }
+            scope_names = scope_names(scopes)
             extras << "scopes: #{scope_names.join(', ')}" if scopes.any?
             constants.each { |c| extras << "#{c[:name]}: #{c[:values].join(', ')}" }
             lines << "  #{extras.join(' | ')}"
@@ -226,8 +188,7 @@ module RailsAiContext
 
         # Shared partials
         begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          shared_dir = File.join(root, "app", "views", "shared")
+          shared_dir = File.join(project_root, "app", "views", "shared")
           if Dir.exist?(shared_dir)
             partials = Dir.glob(File.join(shared_dir, "_*.html.erb")).map { |f| File.basename(f) }.sort
             if partials.any?

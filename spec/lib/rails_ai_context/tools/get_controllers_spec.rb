@@ -161,4 +161,40 @@ RSpec.describe RailsAiContext::Tools::GetControllers do
       expect(text).to include("# CommentsController")
     end
   end
+
+  describe "detail levels with filter data" do
+    before do
+      detail_controllers = {
+        "UsersController" => {
+          actions: %w[index show create],
+          filters: [ { kind: "before_action", name: "authenticate_user!" } ],
+          strong_params: %w[name email],
+          parent_class: "ApplicationController"
+        },
+        "PostsController" => {
+          actions: %w[index show],
+          filters: [],
+          strong_params: %w[title body]
+        }
+      }
+      allow(described_class).to receive(:cached_context).and_return({
+        controllers: { controllers: detail_controllers }
+      })
+    end
+
+    it "returns names with action counts for detail:summary" do
+      result = described_class.call(detail: "summary")
+      text = result.content.first[:text]
+      expect(text).to include("**UsersController** — 3 actions")
+      expect(text).to include("**PostsController** — 2 actions")
+    end
+
+    it "returns everything for detail:full" do
+      result = described_class.call(detail: "full")
+      text = result.content.first[:text]
+      expect(text).to include("## UsersController")
+      expect(text).to include("Filters:")
+      expect(text).to include("authenticate_user!")
+    end
+  end
 end

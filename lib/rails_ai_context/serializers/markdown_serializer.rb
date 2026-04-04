@@ -6,6 +6,9 @@ module RailsAiContext
     # Outputs: CLAUDE.md (for Claude Code), copilot-instructions.md, etc.
     class MarkdownSerializer # rubocop:disable Metrics/ClassLength
       include TestCommandDetection
+      include StackOverviewHelper
+
+      MARKDOWN_SPECIAL_CHARS = /([\\`*_{\}\[\]()+\-#.!~|])/
 
       attr_reader :context
 
@@ -68,8 +71,8 @@ module RailsAiContext
         arch = conv[:architecture] || []
         patterns = conv[:patterns] || []
 
-        arch_labels = RailsAiContext::Tools::GetConventions::ARCH_LABELS rescue {}
-        pattern_labels = RailsAiContext::Tools::GetConventions::PATTERN_LABELS rescue {}
+        arch_labels = arch_labels_hash
+        pattern_labels = pattern_labels_hash
 
         lines = [ "## Overview" ]
         lines << "- **Architecture:** #{arch.map { |a| arch_labels[a] || a }.join(', ')}" if arch.any?
@@ -84,7 +87,7 @@ module RailsAiContext
         lines = [ "## Database Schema (#{schema[:total_tables]} tables)" ]
         schema[:tables]&.each do |name, data|
           cols = (data[:columns] || []).map { |c| "`#{c[:name]}` (#{c[:type]})" }.join(", ")
-          lines << "### #{MarkdownEscape.escape(name)}"
+          lines << "### #{escape_markdown(name)}"
           lines << cols
         end
         lines.join("\n\n")
@@ -98,7 +101,7 @@ module RailsAiContext
         models.each do |name, data|
           next if data[:error]
           assocs = (data[:associations] || []).map { |a| "#{a[:type]} :#{a[:name]}" }.join(", ")
-          lines << "### #{MarkdownEscape.escape(name)}"
+          lines << "### #{escape_markdown(name)}"
           lines << "- Table: `#{data[:table_name]}`" if data[:table_name]
           lines << "- Associations: #{assocs}" if assocs.present?
           if data[:validations]&.any?
@@ -116,7 +119,7 @@ module RailsAiContext
 
         lines = [ "## Routes (#{routes[:total_routes]} total)" ]
         routes[:by_controller]&.sort&.each do |ctrl, actions|
-          lines << "### #{MarkdownEscape.escape(ctrl)}"
+          lines << "### #{escape_markdown(ctrl)}"
           actions.each do |r|
             lines << "- `#{r[:verb]} #{r[:path]}` → #{r[:action]}"
           end
@@ -182,7 +185,7 @@ module RailsAiContext
         lines = [ "## Controllers (#{controllers.size})" ]
         controllers.each do |name, info|
           next if info[:error]
-          lines << "### #{MarkdownEscape.escape(name)}"
+          lines << "### #{escape_markdown(name)}"
           lines << "- Parent: `#{info[:parent_class]}`" if info[:parent_class]
           lines << "- API controller: yes" if info[:api_controller]
           lines << "- Actions: #{info[:actions]&.join(', ')}" if info[:actions]&.any?
@@ -518,6 +521,11 @@ module RailsAiContext
           ---
           _This context file is auto-generated. Run `rails ai:context` to regenerate._
         MD
+      end
+
+      def escape_markdown(text)
+        return "" if text.nil?
+        text.to_s.gsub(MARKDOWN_SPECIAL_CHARS, '\\\\\1')
       end
     end
   end

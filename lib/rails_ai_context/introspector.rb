@@ -63,7 +63,7 @@ module RailsAiContext
       when :routes      then Introspectors::RouteIntrospector.new(app)
       when :jobs        then Introspectors::JobIntrospector.new(app)
       when :gems        then Introspectors::GemIntrospector.new(app)
-      when :conventions then Introspectors::ConventionDetector.new(app)
+      when :conventions then Introspectors::ConventionIntrospector.new(app)
       when :stimulus       then Introspectors::StimulusIntrospector.new(app)
       when :database_stats then Introspectors::DatabaseStatsIntrospector.new(app)
       when :controllers    then Introspectors::ControllerIntrospector.new(app)

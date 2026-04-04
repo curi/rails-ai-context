@@ -180,4 +180,43 @@ RSpec.describe RailsAiContext::Tools::GetModelDetails do
       expect(text).to include("database unreachable")
     end
   end
+
+  describe "detail levels with simple model data" do
+    before do
+      simple_models = {
+        "User" => {
+          table_name: "users",
+          associations: [ { type: "has_many", name: "posts" }, { type: "has_one", name: "profile" } ],
+          validations: [ { kind: "presence", attributes: [ "email" ], options: {} } ]
+        },
+        "Post" => {
+          table_name: "posts",
+          associations: [ { type: "belongs_to", name: "user" } ],
+          validations: []
+        }
+      }
+      allow(described_class).to receive(:cached_context).and_return({ models: simple_models })
+    end
+
+    it "returns names only with detail:summary" do
+      result = described_class.call(detail: "summary")
+      text = result.content.first[:text]
+      expect(text).to include("- Post")
+      expect(text).to include("- User")
+      expect(text).not_to include("associations")
+    end
+
+    it "returns names with association list for detail:full" do
+      result = described_class.call(detail: "full")
+      text = result.content.first[:text]
+      expect(text).to include("**User**")
+      expect(text).to include("has_many :posts")
+    end
+
+    it "supports case-insensitive model lookup" do
+      result = described_class.call(model: "user")
+      text = result.content.first[:text]
+      expect(text).to include("# User")
+    end
+  end
 end

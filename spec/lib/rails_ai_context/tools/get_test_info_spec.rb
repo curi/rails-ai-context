@@ -179,4 +179,33 @@ RSpec.describe RailsAiContext::Tools::GetTestInfo do
       expect(text).to include("3 files")
     end
   end
+
+  describe "full detail with minitest fixtures and helpers" do
+    before do
+      minitest_full_data = {
+        framework: "minitest",
+        factories: nil,
+        factory_names: nil,
+        fixtures: { location: "test/fixtures", count: 3 },
+        fixture_names: { "users" => %w[one two], "posts" => %w[first_post] },
+        system_tests: nil,
+        test_helpers: %w[test/helpers/auth_helper.rb],
+        test_helper_setup: %w[Devise::Test::IntegrationHelpers],
+        test_files: { "models" => { location: "test/models", count: 5 }, "controllers" => { location: "test/controllers", count: 3 } },
+        vcr_cassettes: nil,
+        ci_config: %w[github_actions],
+        coverage: "simplecov"
+      }
+      allow(described_class).to receive(:cached_context).and_return({ tests: minitest_full_data })
+    end
+
+    it "returns full info with fixture names and helper setup" do
+      result = described_class.call(detail: "full")
+      text = result.content.first[:text]
+      expect(text).to include("**users:** one, two")
+      expect(text).to include("**posts:** first_post")
+      expect(text).to include("Devise::Test::IntegrationHelpers")
+      expect(text).to include("simplecov")
+    end
+  end
 end

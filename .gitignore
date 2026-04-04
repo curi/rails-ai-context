@@ -13,3 +13,6 @@ spec/internal/log/
 
 # MCP Registry auth tokens
 .mcpregistry_*
+
+# Integration test apps
+test_apps/

@@ -13,11 +13,11 @@ module RailsAiContext
     # All YAML-supported keys (explicit allowlist for safety)
     YAML_KEYS = %i[
       ai_tools tool_mode preset context_mode generate_root_files claude_max_lines
-      server_name server_version cache_ttl max_tool_response_chars
+      server_name cache_ttl max_tool_response_chars
       live_reload live_reload_debounce auto_mount http_path http_bind http_port
       output_dir skip_tools excluded_models excluded_controllers
       excluded_route_prefixes excluded_filters excluded_middleware excluded_paths
-      sensitive_patterns search_extensions concern_paths frontend_paths mobile_paths
+      sensitive_patterns search_extensions concern_paths frontend_paths
       max_file_size max_test_file_size max_schema_file_size max_view_total_size
       max_view_file_size max_search_results max_validate_files
       query_timeout query_row_limit query_redacted_columns allow_query_in_production
@@ -79,7 +79,11 @@ module RailsAiContext
     }.freeze
 
     # MCP server settings
-    attr_accessor :server_name, :server_version
+    attr_accessor :server_name
+
+    def server_version
+      RailsAiContext::VERSION
+    end
 
     # Which introspectors to run
     attr_accessor :introspectors
@@ -151,6 +155,33 @@ module RailsAiContext
     # Tool invocation mode: :mcp (MCP primary + CLI fallback) or :cli (CLI only)
     attr_accessor :tool_mode
 
+    DEFAULT_EXCLUDED_FILTERS = %w[
+      verify_authenticity_token verify_same_origin_request
+      turbo_tracking_request_id handle_unverified_request
+      mark_for_same_origin_verification
+    ].freeze
+
+    DEFAULT_EXCLUDED_MIDDLEWARE = %w[
+      Rack::Sendfile ActionDispatch::Static ActionDispatch::Executor
+      ActionDispatch::ServerTiming Rack::Runtime
+      ActionDispatch::RequestId ActionDispatch::RemoteIp
+      Rails::Rack::Logger ActionDispatch::ShowExceptions
+      ActionDispatch::DebugExceptions ActionDispatch::Callbacks
+      ActionDispatch::Cookies ActionDispatch::Session::CookieStore
+      ActionDispatch::Flash ActionDispatch::ContentSecurityPolicy::Middleware
+      ActionDispatch::PermissionsPolicy::Middleware ActionDispatch::ActionableExceptions
+      Rack::Head Rack::ConditionalGet Rack::ETag Rack::TempfileReaper
+      ActiveRecord::Migration::CheckPending ActionDispatch::HostAuthorization
+      Rack::MethodOverride ActionDispatch::Session::AbstractSecureStore
+    ].freeze
+
+    DEFAULT_EXCLUDED_CONCERNS = [
+      /::Generated/,
+      /\A(ActiveRecord|ActiveModel|ActiveSupport|ActionText|ActionMailbox|ActiveStorage)/,
+      /\A(ActionDispatch|ActionController|ActionView|AbstractController)/,
+      /\A(Devise::Models|Devise::Orm|Bullet::|Turbo::|GlobalID::|Rolify::)/
+    ].freeze
+
     # Filtering — customize what's hidden from AI output
     attr_accessor :excluded_controllers   # Controller classes hidden from listings (e.g. DeviseController)
     attr_accessor :excluded_route_prefixes # Route controller prefixes hidden with app_only (e.g. action_mailbox/)
@@ -164,7 +195,6 @@ module RailsAiContext
 
     # Frontend framework detection (optional overrides — auto-detected if nil)
     attr_accessor :frontend_paths         # User-declared frontend dirs (e.g. ["app/frontend", "../web-client"])
-    attr_accessor :mobile_paths           # User-declared mobile dirs (e.g. ["../mobile-app"])
 
     # Database query tool settings (rails_query)
     attr_accessor :query_timeout              # Statement timeout in seconds (default: 5)
@@ -177,7 +207,6 @@ module RailsAiContext
 
     def initialize
       @server_name         = "rails-ai-context"
-      @server_version      = RailsAiContext::VERSION
       @introspectors       = PRESETS[:full].dup
       @excluded_paths      = %w[node_modules tmp log vendor .git doc docs]
       @sensitive_patterns  = %w[
@@ -211,30 +240,9 @@ module RailsAiContext
       @max_validate_files       = 50
       @excluded_controllers     = %w[DeviseController Devise::OmniauthCallbacksController]
       @excluded_route_prefixes  = %w[action_mailbox/ active_storage/ rails/ conductor/ devise/ turbo/]
-      @excluded_concerns        = [
-        /::Generated/,
-        /\A(ActiveRecord|ActiveModel|ActiveSupport|ActionText|ActionMailbox|ActiveStorage)/,
-        /\A(ActionDispatch|ActionController|ActionView|AbstractController)/,
-        /\A(Devise::Models|Devise::Orm|Bullet::|Turbo::|GlobalID::|Rolify::)/
-      ]
-      @excluded_filters         = %w[
-        verify_authenticity_token verify_same_origin_request
-        turbo_tracking_request_id handle_unverified_request
-        mark_for_same_origin_verification
-      ]
-      @excluded_middleware      = %w[
-        Rack::Sendfile ActionDispatch::Static ActionDispatch::Executor
-        ActionDispatch::ServerTiming Rack::Runtime
-        ActionDispatch::RequestId ActionDispatch::RemoteIp
-        Rails::Rack::Logger ActionDispatch::ShowExceptions
-        ActionDispatch::DebugExceptions ActionDispatch::Callbacks
-        ActionDispatch::Cookies ActionDispatch::Session::CookieStore
-        ActionDispatch::Flash ActionDispatch::ContentSecurityPolicy::Middleware
-        ActionDispatch::PermissionsPolicy::Middleware ActionDispatch::ActionableExceptions
-        Rack::Head Rack::ConditionalGet Rack::ETag Rack::TempfileReaper
-        ActiveRecord::Migration::CheckPending ActionDispatch::HostAuthorization
-        Rack::MethodOverride ActionDispatch::Session::AbstractSecureStore
-      ]
+      @excluded_concerns        = DEFAULT_EXCLUDED_CONCERNS.dup
+      @excluded_filters         = DEFAULT_EXCLUDED_FILTERS.dup
+      @excluded_middleware      = DEFAULT_EXCLUDED_MIDDLEWARE.dup
       @custom_tools             = []
       @skip_tools               = []
       @ai_tools                 = nil
@@ -242,7 +250,6 @@ module RailsAiContext
       @search_extensions        = %w[rb js erb yml yaml json ts tsx vue svelte haml slim]
       @concern_paths            = %w[app/models/concerns app/controllers/concerns]
       @frontend_paths           = nil
-      @mobile_paths             = nil
       @query_timeout            = 5
       @query_row_limit          = 100
       @query_redacted_columns   = %w[

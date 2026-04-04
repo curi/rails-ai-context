@@ -11,7 +11,6 @@ loader.setup
 module RailsAiContext
   class Error < StandardError; end
   class ConfigurationError < Error; end
-  class IntrospectionError < Error; end
 
   class << self
     # Global configuration

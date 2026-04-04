@@ -10,6 +10,8 @@ module RailsAiContext
     #   app/models/AGENTS.md      — model listing, loaded when editing models
     #   app/controllers/AGENTS.md — controller listing, loaded when editing controllers
     class OpencodeRulesSerializer
+      include StackOverviewHelper
+
       attr_reader :context
 
       def initialize(context)
@@ -19,30 +21,16 @@ module RailsAiContext
       # @param output_dir [String] Rails root path
       # @return [Hash] { written: [paths], skipped: [paths] }
       def call(output_dir)
-        written = []
-        skipped = []
+        files = {}
 
-        files = {
-          File.join("app", "models", "AGENTS.md") => render_models_reference,
-          File.join("app", "controllers", "AGENTS.md") => render_controllers_reference
-        }
-
-        files.each do |relative_path, content|
-          next unless content
-
-          filepath = File.join(output_dir, relative_path)
-          dir = File.dirname(filepath)
-          next unless Dir.exist?(dir)
-
-          if File.exist?(filepath) && File.read(filepath) == content
-            skipped << filepath
-          else
-            File.write(filepath, content)
-            written << filepath
-          end
+        [ [ "app", "models", "AGENTS.md", :render_models_reference ],
+          [ "app", "controllers", "AGENTS.md", :render_controllers_reference ] ].each do |*parts, method|
+          filepath = File.join(output_dir, *parts)
+          next unless Dir.exist?(File.dirname(filepath))
+          files[filepath] = send(method)
         end
 
-        { written: written, skipped: skipped }
+        write_rule_files(files)
       end
 
       private
@@ -72,7 +60,7 @@ module RailsAiContext
           constants = (data[:constants] || [])
           if scopes.any? || constants.any?
             extras = []
-            scope_names = scopes.map { |s| s.is_a?(Hash) ? s[:name] : s }
+            scope_names = scope_names(scopes)
             extras << "scopes: #{scope_names.join(', ')}" if scopes.any?
             constants.each { |c| extras << "#{c[:name]}: #{c[:values].join(', ')}" }
             lines << "  #{extras.join(' | ')}"
@@ -107,15 +95,8 @@ module RailsAiContext
         ]
 
         # ApplicationController before_actions
-        begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          app_ctrl = File.join(root, "app", "controllers", "application_controller.rb")
-          if File.exist?(app_ctrl)
-            source = File.read(app_ctrl)
-            before_actions = source.scan(/before_action\s+:([\w!?]+)/).flatten
-            lines << "**Global before_actions:** #{before_actions.join(', ')}" << "" if before_actions.any?
-          end
-        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
+        before_actions = detect_before_actions
+        lines << "**Global before_actions:** #{before_actions.join(', ')}" << "" if before_actions.any?
 
         app_controllers.keys.sort.first(25).each do |name|
           info = app_controllers[name]
@@ -128,28 +109,12 @@ module RailsAiContext
         lines << "- _...#{app_controllers.size - 25} more_" if app_controllers.size > 25
 
         # List service objects
-        begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          services_dir = File.join(root, "app", "services")
-          if Dir.exist?(services_dir)
-            service_files = Dir.glob(File.join(services_dir, "*.rb"))
-              .map { |f| File.basename(f, ".rb").camelize }
-              .reject { |s| s == "ApplicationService" }
-            lines << "" << "**Services:** #{service_files.join(', ')}" if service_files.any?
-          end
-        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
+        services = detect_service_files
+        lines << "" << "**Services:** #{services.join(', ')}" if services.any?
 
         # List jobs
-        begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          jobs_dir = File.join(root, "app", "jobs")
-          if Dir.exist?(jobs_dir)
-            job_files = Dir.glob(File.join(jobs_dir, "*.rb"))
-              .map { |f| File.basename(f, ".rb").camelize }
-              .reject { |j| j == "ApplicationJob" }
-            lines << "**Jobs:** #{job_files.join(', ')}" if job_files.any?
-          end
-        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
+        jobs = detect_job_files
+        lines << "**Jobs:** #{jobs.join(', ')}" if jobs.any?
 
         lines << ""
         lines << "Use `rails_get_controllers(controller:\"Name\", action:\"index\")` for one action's source code."

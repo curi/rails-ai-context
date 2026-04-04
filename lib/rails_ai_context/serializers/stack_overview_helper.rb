@@ -107,6 +107,90 @@ module RailsAiContext
 
         lines
       end
+
+      # Extract scope names from scope data (handles both Hash and String forms).
+      def scope_names(scopes)
+        scopes.map { |s| s.is_a?(Hash) ? s[:name] : s }
+      end
+
+      # Extract notable gems with triple-fallback for varying introspector output shapes.
+      def notable_gems_list(gems_data)
+        return [] unless gems_data.is_a?(Hash) && !gems_data[:error]
+        gems_data[:notable_gems] || gems_data[:notable] || gems_data[:detected] || []
+      end
+
+      # Safely resolve architecture labels from GetConventions tool.
+      def arch_labels_hash
+        RailsAiContext::Tools::GetConventions::ARCH_LABELS rescue {}
+      end
+
+      def pattern_labels_hash
+        RailsAiContext::Tools::GetConventions::PATTERN_LABELS rescue {}
+      end
+
+      # Write split-rule files with diff-check and atomic writes.
+      # @param files [Hash<String, String|nil>] filepath => content mapping
+      # @return [Hash] { written: [paths], skipped: [paths] }
+      def write_rule_files(files)
+        written = []
+        skipped = []
+
+        files.each do |filepath, content|
+          next unless content
+          if File.exist?(filepath) && File.read(filepath) == content
+            skipped << filepath
+          else
+            dir = File.dirname(filepath)
+            FileUtils.mkdir_p(dir)
+            tmp = File.join(dir, ".#{File.basename(filepath)}.#{SecureRandom.hex(4)}.tmp")
+            File.write(tmp, content)
+            File.rename(tmp, filepath)
+            written << filepath
+          end
+        end
+
+        { written: written, skipped: skipped }
+      end
+
+      # Shared utility: resolve the project root directory.
+      # Used by serializers that scan app/ for services, jobs, controllers, etc.
+      def project_root
+        defined?(Rails) && Rails.respond_to?(:root) && Rails.root ? Rails.root.to_s : Dir.pwd
+      end
+
+      # Scan app/services/ for service object class names.
+      def detect_service_files
+        dir = File.join(project_root, "app", "services")
+        return [] unless Dir.exist?(dir)
+        Dir.glob(File.join(dir, "*.rb"))
+          .map { |f| File.basename(f, ".rb").camelize }
+          .reject { |s| s == "ApplicationService" }
+      rescue => e
+        $stderr.puts "[rails-ai-context] Service file scan skipped: #{e.message}"
+        []
+      end
+
+      # Scan app/jobs/ for job class names.
+      def detect_job_files
+        dir = File.join(project_root, "app", "jobs")
+        return [] unless Dir.exist?(dir)
+        Dir.glob(File.join(dir, "*.rb"))
+          .map { |f| File.basename(f, ".rb").camelize }
+          .reject { |j| j == "ApplicationJob" }
+      rescue => e
+        $stderr.puts "[rails-ai-context] Job file scan skipped: #{e.message}"
+        []
+      end
+
+      # Extract before_action names from ApplicationController source.
+      def detect_before_actions
+        app_ctrl_file = File.join(project_root, "app", "controllers", "application_controller.rb")
+        return [] unless File.exist?(app_ctrl_file)
+        File.read(app_ctrl_file).scan(/before_action\s+:([\w!?]+)/).flatten
+      rescue => e
+        $stderr.puts "[rails-ai-context] Before actions scan skipped: #{e.message}"
+        []
+      end
     end
   end
 end

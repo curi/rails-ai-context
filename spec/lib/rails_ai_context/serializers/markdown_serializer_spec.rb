@@ -105,18 +105,6 @@ RSpec.describe RailsAiContext::Serializers::ClaudeSerializer do
   end
 end
 
-RSpec.describe RailsAiContext::Serializers::RulesSerializer do
-  let(:context) { RailsAiContext.introspect }
-
-  describe "#call" do
-    subject(:output) { described_class.new(context).call }
-
-    it "uses compact project rules header" do
-      expect(output).to include("Project Rules")
-    end
-  end
-end
-
 RSpec.describe RailsAiContext::Serializers::CopilotSerializer do
   let(:context) { RailsAiContext.introspect }
 

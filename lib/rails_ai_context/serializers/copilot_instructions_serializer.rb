@@ -17,31 +17,16 @@ module RailsAiContext
 
       def call(output_dir)
         dir = File.join(output_dir, ".github", "instructions")
-        FileUtils.mkdir_p(dir)
-
-        written = []
-        skipped = []
 
         files = {
-          "rails-context.instructions.md" => render_context_instructions,
-          "rails-models.instructions.md" => render_models_instructions,
-          "rails-controllers.instructions.md" => render_controllers_instructions,
-          "rails-ui-patterns.instructions.md" => render_ui_patterns_instructions,
-          "rails-mcp-tools.instructions.md" => render_mcp_tools_instructions
+          File.join(dir, "rails-context.instructions.md") => render_context_instructions,
+          File.join(dir, "rails-models.instructions.md") => render_models_instructions,
+          File.join(dir, "rails-controllers.instructions.md") => render_controllers_instructions,
+          File.join(dir, "rails-ui-patterns.instructions.md") => render_ui_patterns_instructions,
+          File.join(dir, "rails-mcp-tools.instructions.md") => render_mcp_tools_instructions
         }
 
-        files.each do |filename, content|
-          next unless content
-          filepath = File.join(dir, filename)
-          if File.exist?(filepath) && File.read(filepath) == content
-            skipped << filepath
-          else
-            File.write(filepath, content)
-            written << filepath
-          end
-        end
-
-        { written: written, skipped: skipped }
+        write_rule_files(files)
       end
 
       private
@@ -79,46 +64,23 @@ module RailsAiContext
 
         conv = context[:conventions]
         if conv.is_a?(Hash) && !conv[:error]
-          arch_labels = RailsAiContext::Tools::GetConventions::ARCH_LABELS rescue {}
+          arch_labels = arch_labels_hash
           (conv[:architecture] || []).first(5).each { |p| lines << "- #{arch_labels[p] || p}" }
         end
 
         lines.concat(full_preset_stack_lines)
 
         # List service objects
-        begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          services_dir = File.join(root, "app", "services")
-          if Dir.exist?(services_dir)
-            service_files = Dir.glob(File.join(services_dir, "*.rb"))
-              .map { |f| File.basename(f, ".rb").camelize }
-              .reject { |s| s == "ApplicationService" }
-            lines << "- Services: #{service_files.join(', ')}" if service_files.any?
-          end
-        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
+        services = detect_service_files
+        lines << "- Services: #{services.join(', ')}" if services.any?
 
         # List jobs
-        begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          jobs_dir = File.join(root, "app", "jobs")
-          if Dir.exist?(jobs_dir)
-            job_files = Dir.glob(File.join(jobs_dir, "*.rb"))
-              .map { |f| File.basename(f, ".rb").camelize }
-              .reject { |j| j == "ApplicationJob" }
-            lines << "- Jobs: #{job_files.join(', ')}" if job_files.any?
-          end
-        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
+        jobs = detect_job_files
+        lines << "- Jobs: #{jobs.join(', ')}" if jobs.any?
 
         # ApplicationController before_actions
-        begin
-          root = defined?(Rails) ? Rails.root.to_s : Dir.pwd
-          app_ctrl = File.join(root, "app", "controllers", "application_controller.rb")
-          if File.exist?(app_ctrl)
-            source = File.read(app_ctrl)
-            before_actions = source.scan(/before_action\s+:([\w!?]+)/).flatten
-            lines << "" << "**Global before_actions:** #{before_actions.join(', ')}" if before_actions.any?
-          end
-        rescue => e; $stderr.puts "[rails-ai-context] Serializer section skipped: #{e.message}"; end
+        before_actions = detect_before_actions
+        lines << "" << "**Global before_actions:** #{before_actions.join(', ')}" if before_actions.any?
 
         lines << ""
         lines << "Use MCP tools for detailed data. Start with `detail:\"summary\"`."
@@ -149,7 +111,7 @@ module RailsAiContext
           constants = (data[:constants] || [])
           if scopes.any? || constants.any?
             extras = []
-            scope_names = scopes.map { |s| s.is_a?(Hash) ? s[:name] : s }
+            scope_names = scope_names(scopes)
             extras << "scopes: #{scope_names.join(', ')}" if scopes.any?
             constants.each { |c| extras << "#{c[:name]}: #{c[:values].join(', ')}" }
             lines << "  #{extras.join(' | ')}"
