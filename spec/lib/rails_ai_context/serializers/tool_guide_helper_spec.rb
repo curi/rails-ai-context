@@ -48,7 +48,7 @@ RSpec.describe RailsAiContext::Serializers::ToolGuideHelper do
 
   describe "#tools_header" do
     it "includes tool count and mandatory message" do
-      expect(helper.tools_header).to include("Tools (38)")
+      expect(helper.tools_header).to include("Tools (#{RailsAiContext::Server::TOOLS.size})")
       expect(helper.tools_header).to include("MANDATORY")
     end
   end
@@ -125,10 +125,10 @@ RSpec.describe RailsAiContext::Serializers::ToolGuideHelper do
     it "assembles a complete guide with header, intro, table" do
       lines = helper.render_tools_guide
       text = lines.join("\n")
-      expect(text).to include("Tools (38)")
+      expect(text).to include("Tools (#{RailsAiContext::Server::TOOLS.size})")
       expect(text).to include("START HERE")
       expect(text).to include("Common mistakes")
-      expect(text).to include("All 38 Tools")
+      expect(text).to include("All #{RailsAiContext::Server::TOOLS.size} Tools")
     end
 
     it "includes the anti-hallucination protocol by default" do
@@ -150,9 +150,9 @@ RSpec.describe RailsAiContext::Serializers::ToolGuideHelper do
     it "assembles a compact guide without the full table" do
       lines = helper.render_tools_guide_compact
       text = lines.join("\n")
-      expect(text).to include("Tools (38)")
+      expect(text).to include("Tools (#{RailsAiContext::Server::TOOLS.size})")
       expect(text).to include("power tool")
-      expect(text).to include("All 38 tools")
+      expect(text).to include("All #{RailsAiContext::Server::TOOLS.size} tools")
       # Compact uses name list, not the full table
       expect(text).not_to include("| MCP |")
       expect(text).not_to include("| CLI |")

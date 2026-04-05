@@ -70,4 +70,27 @@ RSpec.describe RailsAiContext::Introspector do
       end
     end
   end
+
+  describe "INTROSPECTOR_MAP / PRESETS drift guard" do
+    it "every PRESETS entry is registered in INTROSPECTOR_MAP" do
+      RailsAiContext::Configuration::PRESETS.each do |preset_name, names|
+        names.each do |name|
+          expect(described_class::INTROSPECTOR_MAP).to have_key(name),
+            "Preset :#{preset_name} references unknown introspector #{name.inspect} — add it to INTROSPECTOR_MAP or remove from PRESETS"
+        end
+      end
+    end
+
+    it "raises ConfigurationError for unknown introspector names" do
+      config = RailsAiContext.configuration
+      original = config.introspectors
+      config.introspectors = [ :nonexistent_thing ]
+      expect { described_class.new(Rails.application).call }
+        .not_to raise_error # errors are captured per-introspector via rescue
+      result = described_class.new(Rails.application).call
+      expect(result[:nonexistent_thing]).to include(error: /Unknown introspector/)
+    ensure
+      config.introspectors = original
+    end
+  end
 end

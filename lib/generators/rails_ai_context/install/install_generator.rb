@@ -459,9 +459,10 @@ module RailsAiContext
         say ""
         say "Commands:", :yellow
         say "  rails ai:context         # Regenerate context files"
-        say "  rails 'ai:tool[schema]'    # Run any of the 38 tools from CLI"
+        tool_count = RailsAiContext::Server::TOOLS.size
+        say "  rails 'ai:tool[schema]'    # Run any of the #{tool_count} tools from CLI"
         if @tool_mode == :mcp
-          say "  rails ai:serve           # Start MCP server (38 live tools)"
+          say "  rails ai:serve           # Start MCP server (#{tool_count} live tools)"
         end
         say "  rails ai:doctor          # Check AI readiness"
         say "  rails ai:inspect         # Print introspection summary"

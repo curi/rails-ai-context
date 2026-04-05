@@ -23,22 +23,27 @@ module RailsAiContext
         RailsAiContext.configuration.tool_mode
       end
 
+      # Derived from Server::TOOLS — the single source of truth for tool count.
+      def tool_count
+        RailsAiContext::Server::TOOLS.size
+      end
+
       def tools_header
-        "## Tools (38) — MANDATORY, Use Before Read"
+        "## Tools (#{tool_count}) — MANDATORY, Use Before Read"
       end
 
       def tools_intro
         case tool_mode
         when :cli
           [
-            "This project has 38 introspection tools. **MANDATORY — use these instead of reading files.**",
+            "This project has #{tool_count} introspection tools. **MANDATORY — use these instead of reading files.**",
             "They return ground truth from the running app: real schema, real associations, real filters — not guesses.",
             "Read files ONLY when you are about to Edit them.",
             ""
           ]
         else
           [
-            "This project has 38 MCP tools via `rails ai:serve` (configured in `.mcp.json`).",
+            "This project has #{tool_count} MCP tools via `rails ai:serve` (configured in `.mcp.json`).",
             "**MANDATORY — use these instead of reading files.** They return ground truth from the running app:",
             "real schema, real associations, real filters — not guesses from file reads.",
             "Read files ONLY when you are about to Edit them.",
@@ -189,7 +194,7 @@ module RailsAiContext
       end
 
       def tools_table
-        lines = [ "### All 38 Tools", "" ]
+        lines = [ "### All #{tool_count} Tools", "" ]
         lines.concat(build_tools_table(include_mcp: tool_mode != :cli))
         lines
       end
